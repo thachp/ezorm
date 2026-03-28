@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck TypeScript workspace
+        run: pnpm typecheck
+
+      - name: Run TypeScript tests
+        run: pnpm test:ts
+
+      - name: Run Rust tests
+        run: cargo test
+
+      - name: Pack npm packages
+        run: pnpm pack:packages
+
+      - name: Smoke test ezorm CLI package
+        run: pnpm smoke:ezorm
+
+      - name: Smoke test proxy-node package
+        run: pnpm smoke:proxy-node

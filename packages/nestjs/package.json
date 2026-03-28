@@ -2,8 +2,25 @@
   "name": "@ezorm/nestjs",
   "version": "0.1.0",
   "description": "NestJS DI adapter for Ezorm ORM clients and repositories.",
+  "license": "MIT",
   "type": "module",
-  "exports": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@ezorm/orm": "0.1.0",
     "@ezorm/runtime-node": "0.1.0"
@@ -15,5 +32,12 @@
     "@nestjs/common": {
       "optional": true
     }
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

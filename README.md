@@ -52,6 +52,8 @@ If you have never used this library before, use this order:
 | Define model metadata with decorators | `npm install @ezorm/core` |
 | Persist models with repository CRUD | `npm install @ezorm/orm` |
 | Add a Node.js runtime helper | `npm install @ezorm/runtime-node` |
+| Add a pooled HTTP runtime client | `npm install @ezorm/runtime-proxy` |
+| Add managed proxy lifecycle helpers | `npm install @ezorm/proxy-node` |
 | Add the Next.js ORM adapter | `npm install @ezorm/next` |
 | Add the NestJS ORM adapter | `npm install @ezorm/nestjs` |
 
@@ -73,6 +75,16 @@ Usage:
 ```
 
 Today, these commands are best treated as workflow discovery. They parse the supported ORM-first command surface and mostly print queued/demo output rather than executing a fully wired migration or introspection workflow.
+
+## Maintainer Release Workflow
+
+Use the committed package manifests as the source of truth for npm releases.
+
+1. Update all release package versions with `pnpm version:workspace <version>`.
+2. Commit the version bump on `main`.
+3. Trigger the `Release npm Packages` GitHub Actions workflow from `main`.
+
+The release workflow validates that every publishable package shares the same version, checks that the target version does not already exist on npm, publishes the JavaScript packages plus the first-pass proxy binary packages, and then pushes a `v<version>` git tag.
 
 ## Define Your First Model
 

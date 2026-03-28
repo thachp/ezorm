@@ -1,12 +1,37 @@
 {
   "name": "@ezorm/orm",
   "version": "0.1.0",
+  "description": "Direct relational ORM, repositories, and schema sync for Ezorm models.",
+  "license": "MIT",
   "type": "module",
-  "exports": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@ezorm/core": "0.1.0",
     "mssql": "^11.0.1",
     "mysql2": "^3.15.3",
     "pg": "^8.16.3"
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

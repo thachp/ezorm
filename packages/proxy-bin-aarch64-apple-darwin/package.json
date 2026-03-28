@@ -10,6 +10,10 @@
   },
   "files": [
     "bin",
-    "README.md"
-  ]
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

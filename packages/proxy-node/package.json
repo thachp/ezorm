@@ -15,21 +15,23 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
   },
   "optionalDependencies": {
     "@ezorm/proxy-bin-aarch64-apple-darwin": "0.1.0",
-    "@ezorm/proxy-bin-aarch64-pc-windows-msvc": "0.1.0",
-    "@ezorm/proxy-bin-aarch64-unknown-linux-gnu": "0.1.0",
     "@ezorm/proxy-bin-x86_64-apple-darwin": "0.1.0",
     "@ezorm/proxy-bin-x86_64-pc-windows-msvc": "0.1.0",
     "@ezorm/proxy-bin-x86_64-unknown-linux-gnu": "0.1.0"
   },
   "scripts": {
-    "build": "node ./scripts/build-package.mjs",
+    "build": "tsc -p ./tsconfig.build.json",
     "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

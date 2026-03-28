@@ -6,6 +6,12 @@ import { fileURLToPath } from "node:url";
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const proxyNodePackageDir = resolve(rootDir, "packages/proxy-node");
+export const RELEASED_PROXY_TARGET_TRIPLES = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc"
+];
 
 const BINARY_PACKAGE_BY_TARGET = {
   "aarch64-apple-darwin": "@ezorm/proxy-bin-aarch64-apple-darwin",
@@ -52,23 +58,12 @@ export function packCurrentPlatformBinaryPackage(outputDir) {
   mkdirSync(outputDir, { recursive: true });
 
   const targetTriple = detectProxyTargetTriple();
-  const executableName = process.platform === "win32" ? "ezorm_proxy.exe" : "ezorm_proxy";
-  const sourceBinary = buildCurrentPlatformProxyBinary(executableName);
-  const packageName = BINARY_PACKAGE_BY_TARGET[targetTriple];
-  const templateDir = resolve(rootDir, "packages", packageName.replace("@ezorm/", ""));
-  const stagingDir = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-bin-"));
-
-  mkdirSync(resolve(stagingDir, "bin"), { recursive: true });
-  copyFileSync(resolve(templateDir, "package.json"), resolve(stagingDir, "package.json"));
-  copyFileSync(resolve(templateDir, "README.md"), resolve(stagingDir, "README.md"));
-  copyFileSync(sourceBinary, resolve(stagingDir, "bin", executableName));
-
-  const packResult = packNpmPackage(stagingDir, outputDir);
-  return {
-    ...packResult,
-    packageName,
+  const sourceBinaryPath = buildCurrentPlatformProxyBinary(targetTriple);
+  return packageProxyBinaryPackage({
+    outputDir,
+    sourceBinaryPath,
     targetTriple
-  };
+  });
 }
 
 export function packNpmPackage(packageDir, outputDir) {
@@ -86,7 +81,43 @@ export function packNpmPackage(packageDir, outputDir) {
   return { filename };
 }
 
-function buildCurrentPlatformProxyBinary(executableName) {
+export function packageProxyBinaryPackage({ outputDir, sourceBinaryPath, targetTriple }) {
+  mkdirSync(outputDir, { recursive: true });
+
+  const packageName = getBinaryPackageNameForTarget(targetTriple);
+  const executableName = executableNameForTarget(targetTriple);
+  const templateDir = resolve(rootDir, "packages", packageName.replace("@ezorm/", ""));
+  const stagingDir = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-bin-"));
+
+  mkdirSync(resolve(stagingDir, "bin"), { recursive: true });
+  copyFileSync(resolve(templateDir, "package.json"), resolve(stagingDir, "package.json"));
+  copyFileSync(resolve(templateDir, "README.md"), resolve(stagingDir, "README.md"));
+
+  const licensePath = resolve(templateDir, "LICENSE");
+  if (existsSync(licensePath)) {
+    copyFileSync(licensePath, resolve(stagingDir, "LICENSE"));
+  }
+
+  copyFileSync(sourceBinaryPath, resolve(stagingDir, "bin", executableName));
+
+  const packResult = packNpmPackage(stagingDir, outputDir);
+  return {
+    ...packResult,
+    packageName,
+    targetTriple
+  };
+}
+
+export function buildCurrentPlatformProxyBinary(targetTriple = detectProxyTargetTriple()) {
+  const currentTargetTriple = detectProxyTargetTriple();
+
+  if (currentTargetTriple !== targetTriple) {
+    throw new Error(
+      `Current runner target ${currentTargetTriple} does not match requested target ${targetTriple}.`
+    );
+  }
+
+  const executableName = executableNameForTarget(targetTriple);
   const build = spawnSync("cargo", ["build", "-p", "ezorm_proxy", "--release"], {
     cwd: rootDir,
     stdio: "inherit"
@@ -102,6 +133,20 @@ function buildCurrentPlatformProxyBinary(executableName) {
   }
 
   return sourceBinary;
+}
+
+export function executableNameForTarget(targetTriple) {
+  return targetTriple.includes("windows") ? "ezorm_proxy.exe" : "ezorm_proxy";
+}
+
+export function getBinaryPackageNameForTarget(targetTriple) {
+  const packageName = BINARY_PACKAGE_BY_TARGET[targetTriple];
+
+  if (!packageName) {
+    throw new Error(`Unsupported proxy package target: ${targetTriple}`);
+  }
+
+  return packageName;
 }
 
 function parsePackOutput(stdout) {

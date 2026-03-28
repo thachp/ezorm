@@ -2,6 +2,7 @@
   "name": "@ezorm/next",
   "version": "0.1.0",
   "description": "Next.js adapters for direct Ezorm node clients and proxy-backed edge clients.",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@ezorm/orm": "0.1.0",
@@ -9,9 +10,38 @@
     "@ezorm/runtime-node": "0.1.0",
     "@ezorm/runtime-proxy": "0.1.0"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./node": "./src/node.ts",
-    "./edge": "./src/edge.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./edge": {
+      "types": "./dist/edge.d.ts",
+      "import": "./dist/edge.js",
+      "default": "./dist/edge.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,10 +1,35 @@
 {
   "name": "@ezorm/runtime-proxy",
   "version": "0.1.0",
+  "description": "HTTP proxy-backed ORM client for Ezorm pooled runtimes.",
+  "license": "MIT",
   "type": "module",
-  "exports": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@ezorm/core": "0.1.0",
     "@ezorm/orm": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

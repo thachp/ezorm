@@ -19,6 +19,7 @@
 - Prefer the root validation commands that already exist: `pnpm typecheck`, `pnpm test:ts`, `pnpm test`, and `cargo test`.
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared ORM/repository helpers instead of reimplementing it inline.
 - Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/edge`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
+- npm release preparation should go through `pnpm version:workspace <version>` committed to `main`, then the manual `Release npm Packages` GitHub Actions workflow.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
 
 ## Common Commands
@@ -26,21 +27,25 @@
 Root scripts:
 
 - `pnpm build:ts`
+- `pnpm build:packages`
 - `pnpm build:proxy-node`
 - `pnpm build:ezorm`
 - `pnpm example:build`
 - `pnpm example:nest:dev`
 - `pnpm example:next:dev`
 - `pnpm example:test`
+- `pnpm pack:packages`
 - `pnpm pack:proxy-node`
 - `pnpm typecheck`
 - `pnpm pack:ezorm`
+- `pnpm release:check`
 - `pnpm smoke:proxy-node`
 - `pnpm smoke:ezorm`
 - `pnpm release:proxy-node`
 - `pnpm release:ezorm`
 - `pnpm test:ts`
 - `pnpm test`
+- `pnpm version:workspace <version>`
 - `cargo test`
 
 Current CLI command workflows:

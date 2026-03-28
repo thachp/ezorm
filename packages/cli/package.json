@@ -28,5 +28,8 @@
   "scripts": {
     "build": "tsc -p ./tsconfig.build.json",
     "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

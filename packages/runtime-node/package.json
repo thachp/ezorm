@@ -15,12 +15,11 @@
   },
   "files": [
     "dist",
-    "scripts/build-package.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "node ./scripts/build-package.mjs",
+    "build": "tsc -p ./tsconfig.build.json",
     "prepack": "pnpm run build"
   },
   "engines": {
@@ -28,5 +27,8 @@
   },
   "dependencies": {
     "@ezorm/orm": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
