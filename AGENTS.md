@@ -6,6 +6,7 @@
 - Rust workspace validation lives at the repository root via `cargo`.
 - CQRS and event-sourcing primitives live in `packages/cqrs` and `packages/events`.
 - Relational persistence support exists for the event store, snapshots, and projection checkpoints; projector replay/reset adapters should route through shared engine/runtime primitives instead of in-memory-only state.
+- The HTTP runtime proxy lives in `crates/proxy`, and edge-facing TypeScript clients should use `packages/runtime-proxy` instead of importing native bindings.
 - Keep workflow documentation aligned with the actual workspace surface before adding new commands or adapters.
 
 ## Preferred Workflow
@@ -28,6 +29,7 @@ Root scripts:
 - `pnpm test:ts`
 - `pnpm test`
 - `cargo test`
+- `DATABASE_URL=sqlite://sqlmodel.db cargo run -p sqlmodel_proxy`
 
 Current CLI command workflows:
 

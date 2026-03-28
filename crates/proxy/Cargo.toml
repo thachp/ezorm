@@ -5,7 +5,13 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlmodel_event_store = { path = "../event_store" }
+thiserror.workspace = true
+tokio.workspace = true
 
+[dev-dependencies]
+reqwest.workspace = true
+tower.workspace = true
