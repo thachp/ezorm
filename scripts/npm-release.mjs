@@ -202,8 +202,12 @@ function run(command, args, options = {}) {
 
   if (result.status !== 0) {
     if (options.stdio !== "inherit") {
-      process.stderr.write(result.stdout);
-      process.stderr.write(result.stderr);
+      if (result.stdout) {
+        process.stderr.write(result.stdout);
+      }
+      if (result.stderr) {
+        process.stderr.write(result.stderr);
+      }
     }
 
     throw new Error(`Command failed: ${command} ${args.join(" ")}`);

@@ -118,8 +118,12 @@ function run(command, args, cwd) {
   });
 
   if (result.status !== 0) {
-    process.stderr.write(result.stdout);
-    process.stderr.write(result.stderr);
+    if (result.stdout) {
+      process.stderr.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
     process.exit(result.status ?? 1);
   }
 

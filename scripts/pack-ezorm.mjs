@@ -19,8 +19,12 @@ const result = spawnSync(
 );
 
 if (result.status !== 0) {
-  process.stderr.write(result.stderr);
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
   process.exit(result.status ?? 1);
 }
 
-process.stdout.write(result.stdout);
+if (result.stdout) {
+  process.stdout.write(result.stdout);
+}

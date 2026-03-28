@@ -31,8 +31,12 @@ function packPackage(cwd) {
   );
 
   if (packResult.status !== 0) {
-    process.stderr.write(packResult.stdout);
-    process.stderr.write(packResult.stderr);
+    if (packResult.stdout) {
+      process.stderr.write(packResult.stdout);
+    }
+    if (packResult.stderr) {
+      process.stderr.write(packResult.stderr);
+    }
     process.exit(packResult.status ?? 1);
   }
 
@@ -109,8 +113,12 @@ function run(command, args, cwd = workspace) {
   });
 
   if (result.status !== 0) {
-    process.stderr.write(result.stdout);
-    process.stderr.write(result.stderr);
+    if (result.stdout) {
+      process.stderr.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
     process.exit(result.status ?? 1);
   }
 
