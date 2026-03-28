@@ -73,6 +73,9 @@ export function packNpmPackage(packageDir, outputDir) {
   });
 
   if (result.status !== 0) {
+    if (result.stdout) {
+      process.stderr.write(result.stdout);
+    }
     if (result.stderr) {
       process.stderr.write(result.stderr);
     }
