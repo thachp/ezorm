@@ -1,4 +1,8 @@
-export type ModelKind = "aggregate" | "projection" | "event";
+export type ModelKind = "model";
+
+export interface ModelOptions {
+  table?: string;
+}
 
 export interface FieldOptions {
   type: string;
@@ -28,6 +32,7 @@ export interface ModelMetadata {
   kind: ModelKind;
   target: Function;
   name: string;
+  table: string;
   fields: FieldMetadata[];
   indices: IndexMetadata[];
   relations: RelationMetadata[];
@@ -37,4 +42,3 @@ export interface ValidationIssue {
   field: string;
   message: string;
 }
-

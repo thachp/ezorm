@@ -1,33 +1,20 @@
-import {
-  VersionConflictError,
-  type DomainEvent,
-  type EventStore,
-  type StoredEvent
-} from "@sqlmodel/events";
+import { getModelMetadata } from "@sqlmodel/core";
+import type {
+  FindManyOptions,
+  ModelClass,
+  OrmClient,
+  Repository,
+  TableSchema
+} from "@sqlmodel/orm";
 
-export interface ProxyRuntimeClientOptions {
+export interface ProxyOrmClientOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
-}
-
-export interface ProxyRuntimeErrorDetails {
-  streamId?: string;
-  expectedVersion?: number;
-  actualVersion?: number;
 }
 
 export interface ProxyRuntimeErrorBody {
   code?: string;
   message?: string;
-  details?: ProxyRuntimeErrorDetails;
-}
-
-interface EventListResponse {
-  events: StoredEvent[];
-}
-
-interface LatestVersionResponse {
-  version: number;
 }
 
 export class ProxyRuntimeError extends Error {
@@ -41,37 +28,67 @@ export class ProxyRuntimeError extends Error {
   }
 }
 
-export class ProxyRuntimeClient implements EventStore {
+export class ProxyOrmClient implements OrmClient {
   private readonly endpoint: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(options: ProxyRuntimeClientOptions) {
+  constructor(options: ProxyOrmClientOptions) {
     this.endpoint = options.endpoint.replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async load(streamId: string): Promise<StoredEvent[]> {
-    const response = await this.post<EventListResponse>("/events/load", { streamId });
-    return response.events;
+  repository<T extends object>(model: ModelClass<T>): Repository<T> {
+    const metadata = getModelMetadata(model);
+    const primaryKey = metadata.fields.find((field) => field.primaryKey);
+
+    if (!primaryKey) {
+      throw new Error(`Model ${metadata.name} must declare a primary key`);
+    }
+
+    return {
+      create: (input) =>
+        this.post<T>("/orm/create", {
+          table: metadata.table,
+          input
+        }),
+      findById: (id) =>
+        this.post<T | undefined>("/orm/find-by-id", {
+          table: metadata.table,
+          id
+        }),
+      findMany: (options?: FindManyOptions<T>) =>
+        this.post<T[]>("/orm/find-many", {
+          table: metadata.table,
+          options
+        }),
+      update: (id, patch) =>
+        this.post<T>("/orm/update", {
+          table: metadata.table,
+          id,
+          patch
+        }),
+      delete: async (id) => {
+        await this.post<void>("/orm/delete", {
+          table: metadata.table,
+          id,
+          primaryKey: primaryKey.name
+        });
+      }
+    };
   }
 
-  async loadAll(afterSequence = 0): Promise<StoredEvent[]> {
-    const response = await this.post<EventListResponse>("/events/load-all", { afterSequence });
-    return response.events;
-  }
-
-  async append(streamId: string, version: number, events: DomainEvent[]): Promise<StoredEvent[]> {
-    const response = await this.post<EventListResponse>("/events/append", {
-      streamId,
-      version,
-      events
+  async pushSchema(models: Function[]): Promise<{ statements: string[] }> {
+    return this.post("/orm/schema/push", {
+      models: models.map((model) => getModelMetadata(model))
     });
-    return response.events;
   }
 
-  async latestVersion(streamId: string): Promise<number> {
-    const response = await this.post<LatestVersionResponse>("/events/latest-version", { streamId });
-    return response.version;
+  async pullSchema(): Promise<TableSchema[]> {
+    return this.post("/orm/schema/pull", {});
+  }
+
+  async close(): Promise<void> {
+    return undefined;
   }
 
   private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
@@ -85,25 +102,16 @@ export class ProxyRuntimeClient implements EventStore {
       throw await this.toProxyError(response);
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return (await response.json()) as T;
   }
 
   private async toProxyError(response: Response): Promise<Error> {
     const rawBody = await response.text();
     const payload = parseProxyRuntimeError(rawBody);
-
-    if (
-      payload?.code === "version_conflict" &&
-      typeof payload.details?.streamId === "string" &&
-      typeof payload.details.expectedVersion === "number" &&
-      typeof payload.details.actualVersion === "number"
-    ) {
-      return new VersionConflictError(
-        payload.details.streamId,
-        payload.details.expectedVersion,
-        payload.details.actualVersion
-      );
-    }
 
     return new ProxyRuntimeError(
       response.status,

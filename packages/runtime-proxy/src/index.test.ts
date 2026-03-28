@@ -1,107 +1,62 @@
 import { describe, expect, it, vi } from "vitest";
-import { VersionConflictError } from "@sqlmodel/events";
-import { ProxyRuntimeClient, ProxyRuntimeError } from "./index";
+import { Field, Model, PrimaryKey } from "@sqlmodel/core";
+import { ProxyOrmClient, ProxyRuntimeError } from "./index";
+
+@Model({ table: "users" })
+class User {
+  @PrimaryKey()
+  @Field.string()
+  id!: string;
+
+  @Field.string()
+  email!: string;
+}
 
 describe("@sqlmodel/runtime-proxy", () => {
-  it("posts load requests and unwraps event lists", async () => {
+  it("posts repository lookups through the ORM proxy contract", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        events: [
-          {
-            streamId: "account-1",
-            version: 1,
-            sequence: 1,
-            type: "account.opened",
-            payload: { owner: "alice" },
-            schemaVersion: 1,
-            recordedAt: new Date(0).toISOString()
-          }
-        ]
-      })
+      jsonResponse({ id: "usr_1", email: "alice@example.com" })
     );
-    const client = new ProxyRuntimeClient({
+    const client = new ProxyOrmClient({
       endpoint: "http://runtime.internal/",
       fetchImpl
     });
+    const repository = client.repository(User);
 
-    await expect(client.load("account-1")).resolves.toMatchObject([
-      { streamId: "account-1", type: "account.opened" }
-    ]);
+    await expect(repository.findById("usr_1")).resolves.toEqual({
+      id: "usr_1",
+      email: "alice@example.com"
+    });
     expect(fetchImpl).toHaveBeenCalledWith(
-      "http://runtime.internal/events/load",
+      "http://runtime.internal/orm/find-by-id",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ streamId: "account-1" })
+        body: JSON.stringify({ table: "users", id: "usr_1" })
       })
     );
   });
 
-  it("posts append requests with the current contract body", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        events: [
-          {
-            streamId: "account-1",
-            version: 1,
-            sequence: 1,
-            type: "account.opened",
-            payload: {},
-            schemaVersion: 1,
-            recordedAt: new Date(0).toISOString()
-          }
-        ]
-      })
-    );
-    const client = new ProxyRuntimeClient({ endpoint: "http://runtime.internal", fetchImpl });
+  it("posts ordered repository queries", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([]));
+    const client = new ProxyOrmClient({ endpoint: "http://runtime.internal", fetchImpl });
+    const repository = client.repository(User);
 
-    await client.append("account-1", 0, [{ type: "account.opened", payload: {} }]);
-
+    await repository.findMany({
+      where: { email: "alice@example.com" },
+      orderBy: { field: "email", direction: "asc" }
+    });
     expect(fetchImpl).toHaveBeenCalledWith(
-      "http://runtime.internal/events/append",
+      "http://runtime.internal/orm/find-many",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          streamId: "account-1",
-          version: 0,
-          events: [{ type: "account.opened", payload: {} }]
+          table: "users",
+          options: {
+            where: { email: "alice@example.com" },
+            orderBy: { field: "email", direction: "asc" }
+          }
         })
       })
-    );
-  });
-
-  it("calls the dedicated latest-version route", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ version: 3 }));
-    const client = new ProxyRuntimeClient({ endpoint: "http://runtime.internal", fetchImpl });
-
-    await expect(client.latestVersion("account-1")).resolves.toBe(3);
-    expect(fetchImpl).toHaveBeenCalledWith(
-      "http://runtime.internal/events/latest-version",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ streamId: "account-1" })
-      })
-    );
-  });
-
-  it("maps version conflicts into VersionConflictError", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse(
-        {
-          code: "version_conflict",
-          message: "Version conflict for account-1: expected 0, actual 1",
-          details: {
-            streamId: "account-1",
-            expectedVersion: 0,
-            actualVersion: 1
-          }
-        },
-        409
-      )
-    );
-    const client = new ProxyRuntimeClient({ endpoint: "http://runtime.internal", fetchImpl });
-
-    await expect(client.append("account-1", 0, [])).rejects.toEqual(
-      new VersionConflictError("account-1", 0, 1)
     );
   });
 
@@ -115,9 +70,10 @@ describe("@sqlmodel/runtime-proxy", () => {
         500
       )
     );
-    const client = new ProxyRuntimeClient({ endpoint: "http://runtime.internal", fetchImpl });
+    const client = new ProxyOrmClient({ endpoint: "http://runtime.internal", fetchImpl });
+    const repository = client.repository(User);
 
-    await expect(client.load("account-1")).rejects.toMatchObject({
+    await expect(repository.findById("usr_1")).rejects.toMatchObject({
       name: "ProxyRuntimeError",
       status: 500,
       code: "internal_error",

@@ -2,16 +2,14 @@ import { describe, expect, it } from "vitest";
 import { formatCliHelp, parseCliCommand, runCli } from "sqlmod";
 
 describe("regression: cli-routing", () => {
-  it("parses projector replay commands consistently", () => {
-    expect(parseCliCommand(["projector", "replay", "balances"])).toEqual([
-      "projector",
-      "replay",
-      "balances"
-    ]);
+  it("parses the ORM-first command surface consistently", () => {
+    expect(parseCliCommand(["db", "push"])).toEqual(["db", "push"]);
     expect(runCli(["migrate", "status"])).toBe("Queued migrate status");
   });
 
   it("documents the sqlmod command surface", () => {
     expect(formatCliHelp()).toContain("sqlmod migrate status");
+    expect(formatCliHelp()).toContain("sqlmod db push");
+    expect(formatCliHelp()).not.toContain("sqlmod projector replay");
   });
 });

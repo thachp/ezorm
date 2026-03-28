@@ -1,10 +1,10 @@
-import { ProxyRuntimeClient } from "@sqlmodel/runtime-proxy";
+import { ProxyOrmClient } from "@sqlmodel/runtime-proxy";
 import { NEXT_EDGE_RUNTIME, assertEdgeSafeImport } from "./index";
 
 export function createNextEdgeRuntime(endpoint: string) {
   return {
     runtime: NEXT_EDGE_RUNTIME,
-    store: new ProxyRuntimeClient({ endpoint })
+    client: new ProxyOrmClient({ endpoint })
   };
 }
 

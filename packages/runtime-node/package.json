@@ -31,6 +31,6 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@sqlmodel/events": "0.1.0"
+    "@sqlmodel/orm": "0.1.0"
   }
 }

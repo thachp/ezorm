@@ -13,7 +13,6 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
-    "@sqlmodel/cqrs": "workspace:*",
     "@sqlmodel/example-todo-domain": "workspace:*",
     "@sqlmodel/nestjs": "workspace:*",
     "class-transformer": "^0.5.1",

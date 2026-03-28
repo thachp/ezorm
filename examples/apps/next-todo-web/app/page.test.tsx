@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   completeTodo: vi.fn(),
   createTodo: vi.fn(),
   fetchTodos: vi.fn<() => Promise<TodoListItem[]>>(),
-  rebuildProjection: vi.fn(),
   redirect: vi.fn(),
   revalidatePath: vi.fn(),
   reopenTodo: vi.fn()
@@ -24,7 +23,6 @@ vi.mock("../lib/todo-api", () => ({
   completeTodo: mocks.completeTodo,
   createTodo: mocks.createTodo,
   fetchTodos: mocks.fetchTodos,
-  rebuildProjection: mocks.rebuildProjection,
   reopenTodo: mocks.reopenTodo
 }));
 
@@ -39,16 +37,15 @@ describe("@sqlmodel/example-next-todo-web page", () => {
     mocks.fetchTodos.mockResolvedValue([
       {
         id: "todo-1",
-        title: "Drive CQRS demo",
-        completed: false,
-        version: 1
+        title: "Drive ORM demo",
+        completed: false
       }
     ]);
 
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
 
-    expect(html).toContain("Drive CQRS demo");
-    expect(html).toContain("Projected todo list");
+    expect(html).toContain("Drive ORM demo");
+    expect(html).toContain("Todo list");
   });
 
   it("renders load failures as error banners", async () => {

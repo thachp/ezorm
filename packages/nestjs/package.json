@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "exports": "./src/index.ts",
+  "dependencies": {
+    "@sqlmodel/orm": "0.1.0"
+  },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0"
   },
@@ -12,4 +15,3 @@
     }
   }
 }
-

@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@sqlmodel/core": ["packages/core/src/index.ts"],
+      "@sqlmodel/orm": ["packages/orm/src/index.ts"],
       "@sqlmodel/cqrs": ["packages/cqrs/src/index.ts"],
       "@sqlmodel/events": ["packages/events/src/index.ts"],
       "@sqlmodel/proxy-node": ["packages/proxy-node/src/index.ts"],

@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  Aggregate,
   BelongsTo,
   Field,
   HasMany,
   Index,
+  Model,
   PrimaryKey,
-  Projection,
   Unique,
   clearMetadataRegistry,
   getModelMetadata,
@@ -18,11 +17,11 @@ describe("@sqlmodel/core", () => {
     clearMetadataRegistry();
   });
 
-  it("registers aggregate metadata with fields, indices, and relations", () => {
-    @Aggregate()
+  it("registers model metadata with fields, indices, relations, and a resolved table name", () => {
+    @Model({ table: "users" })
     @Index(["email"])
     @Unique(["email"], "users_email_unique")
-    class UserAggregate {
+    class User {
       @PrimaryKey()
       @Field.string()
       id!: string;
@@ -30,30 +29,31 @@ describe("@sqlmodel/core", () => {
       @Field.string()
       email!: string;
 
-      @HasMany(() => UserProjection)
-      projections!: unknown[];
+      @HasMany(() => UserProfile)
+      profiles!: unknown[];
     }
 
-    @Projection()
-    class UserProjection {
+    @Model()
+    class UserProfile {
       @PrimaryKey()
       @Field.string()
       id!: string;
 
-      @BelongsTo(() => UserAggregate)
-      aggregate!: unknown;
+      @BelongsTo(() => User)
+      user!: unknown;
     }
 
-    const metadata = getModelMetadata(UserAggregate);
-    expect(metadata.kind).toBe("aggregate");
+    const metadata = getModelMetadata(User);
+    expect(metadata.kind).toBe("model");
+    expect(metadata.table).toBe("users");
     expect(metadata.fields.map((field) => field.name)).toEqual(["id", "email"]);
     expect(metadata.indices).toHaveLength(2);
-    expect(metadata.relations[0]).toMatchObject({ kind: "hasMany", name: "projections" });
+    expect(metadata.relations[0]).toMatchObject({ kind: "hasMany", name: "profiles" });
   });
 
   it("validates DTO input using field definitions", () => {
-    @Aggregate()
-    class OrderAggregate {
+    @Model()
+    class Order {
       @PrimaryKey()
       @Field.string()
       id!: string;
@@ -62,8 +62,8 @@ describe("@sqlmodel/core", () => {
       amount!: number;
     }
 
-    expect(validateModelInput(OrderAggregate, { id: "ord_1", amount: 25 })).toEqual([]);
-    expect(validateModelInput(OrderAggregate, { id: "ord_1", amount: -1 })).toEqual([
+    expect(validateModelInput(Order, { id: "ord_1", amount: 25 })).toEqual([]);
+    expect(validateModelInput(Order, { id: "ord_1", amount: -1 })).toEqual([
       { field: "amount", message: "Must be positive" }
     ]);
   });

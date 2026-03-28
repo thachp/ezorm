@@ -5,18 +5,16 @@ export type CliCommand =
   | ["migrate", "generate", string?]
   | ["migrate", "apply"]
   | ["migrate", "status"]
-  | ["projector", "replay", string?]
-  | ["projector", "reset", string?]
-  | ["db", "pull"];
+  | ["db", "pull"]
+  | ["db", "push"];
 
 const HELP_TEXT = [
   "Usage:",
   "  sqlmod migrate generate [name]",
   "  sqlmod migrate apply",
   "  sqlmod migrate status",
-  "  sqlmod projector replay [name]",
-  "  sqlmod projector reset [name]",
-  "  sqlmod db pull"
+  "  sqlmod db pull",
+  "  sqlmod db push"
 ].join("\n");
 
 export function parseCliCommand(argv: string[]): CliCommand {
@@ -31,14 +29,11 @@ export function parseCliCommand(argv: string[]): CliCommand {
   if (scope === "migrate" && action === "status") {
     return ["migrate", "status"];
   }
-  if (scope === "projector" && action === "replay") {
-    return ["projector", "replay", argument];
-  }
-  if (scope === "projector" && action === "reset") {
-    return ["projector", "reset", argument];
-  }
   if (scope === "db" && action === "pull") {
     return ["db", "pull"];
+  }
+  if (scope === "db" && action === "push") {
+    return ["db", "push"];
   }
 
   throw new Error(`Unknown command: ${argv.join(" ")}`);

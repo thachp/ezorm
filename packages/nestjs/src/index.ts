@@ -1,26 +1,33 @@
-import type { EventStore } from "@sqlmodel/events";
-import type { CommandBus, ProjectorRegistry, QueryBus } from "@sqlmodel/cqrs";
+import type { ModelClass, OrmClient, Repository } from "@sqlmodel/orm";
 
 export interface SqlModelNestModuleOptions {
-  eventStore: EventStore;
-  commandBus: CommandBus;
-  queryBus: QueryBus;
-  projectors?: ProjectorRegistry;
+  client: OrmClient;
+  repositories?: SqlModelRepositoryProvider[];
+}
+
+export interface SqlModelRepositoryProvider<T extends object = Record<string, unknown>> {
+  provide: string;
+  model: ModelClass<T>;
 }
 
 export interface NestProviderDescriptor<T = unknown> {
   provide: string;
-  useValue: T;
+  useValue?: T;
+  useFactory?: (...args: any[]) => T;
+  inject?: string[];
 }
 
 export function createSqlModelProviders(
   options: SqlModelNestModuleOptions
 ): NestProviderDescriptor[] {
   return [
-    { provide: "SQLMODEL_EVENT_STORE", useValue: options.eventStore },
-    { provide: "SQLMODEL_COMMAND_BUS", useValue: options.commandBus },
-    { provide: "SQLMODEL_QUERY_BUS", useValue: options.queryBus },
-    { provide: "SQLMODEL_PROJECTORS", useValue: options.projectors ?? null }
+    { provide: "SQLMODEL_ORM_CLIENT", useValue: options.client },
+    ...(options.repositories ?? []).map((repository) => ({
+      provide: repository.provide,
+      useFactory: (client: OrmClient): Repository<Record<string, unknown>> =>
+        client.repository(repository.model),
+      inject: ["SQLMODEL_ORM_CLIENT"]
+    }))
   ];
 }
 
@@ -33,4 +40,3 @@ export class SqlModelModule {
     };
   }
 }
-

@@ -17,4 +17,10 @@ describe("regression: next-edge-import", () => {
       "Edge runtime modules must not import @sqlmodel/proxy-node"
     );
   });
+
+  it("rejects direct ORM imports in edge modules", () => {
+    expect(() => assertEdgeSafeImport('import "@sqlmodel/orm";')).toThrow(
+      "Edge runtime modules must not import @sqlmodel/orm"
+    );
+  });
 });

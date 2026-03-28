@@ -19,7 +19,7 @@ describe("@sqlmodel/example-nest-todo-api", () => {
 
     const createResponse = await request(app.getHttpServer())
       .post("/todos")
-      .send({ title: "Call projector replay" })
+      .send({ title: "Ship repository CRUD" })
       .expect(201);
 
     const todoId = createResponse.body.todo.id as string;
@@ -27,31 +27,34 @@ describe("@sqlmodel/example-nest-todo-api", () => {
     await request(app.getHttpServer()).get("/todos").expect(200).expect([
       {
         id: todoId,
-        title: "Call projector replay",
-        completed: false,
-        version: 1
+        title: "Ship repository CRUD",
+        completed: false
       }
     ]);
 
-    await request(app.getHttpServer()).post(`/todos/${todoId}/complete`).expect(201);
-    await request(app.getHttpServer()).post(`/todos/${todoId}/reopen`).expect(201);
-
-    await created.services.readModelStore.reset();
-    await request(app.getHttpServer()).get("/todos").expect(200).expect([]);
-
-    const rebuildResponse = await request(app.getHttpServer())
-      .post("/projectors/todos/rebuild")
-      .expect(201);
-
-    expect(rebuildResponse.body.checkpoint.lastSequence).toBe(3);
+    await request(app.getHttpServer()).post(`/todos/${todoId}/complete`).expect(201).expect({
+      todo: {
+        id: todoId,
+        title: "Ship repository CRUD",
+        completed: true
+      }
+    });
+    await request(app.getHttpServer()).post(`/todos/${todoId}/reopen`).expect(201).expect({
+      todo: {
+        id: todoId,
+        title: "Ship repository CRUD",
+        completed: false
+      }
+    });
 
     await request(app.getHttpServer()).get("/todos").expect(200).expect([
       {
         id: todoId,
-        title: "Call projector replay",
-        completed: false,
-        version: 3
+        title: "Ship repository CRUD",
+        completed: false
       }
     ]);
+
+    await created.services.close();
   });
 });

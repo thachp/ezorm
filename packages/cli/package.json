@@ -1,7 +1,7 @@
 {
   "name": "sqlmod",
   "version": "0.1.0",
-  "description": "SQLModel CLI for migrations, projectors, and database workflows.",
+  "description": "SQLModel CLI for migrations and database workflows.",
   "license": "MIT",
   "type": "module",
   "bin": {

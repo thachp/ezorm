@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import {
   completeTodo,
   createTodo,
-  rebuildProjection,
   reopenTodo
 } from "../lib/todo-api";
 
@@ -65,18 +64,4 @@ export async function reopenTodoAction(formData: FormData): Promise<never> {
 
   revalidatePath("/");
   return redirectWithQuery("status", "Todo reopened");
-}
-
-export async function rebuildProjectionAction(): Promise<never> {
-  let sequence = 0;
-
-  try {
-    const result = await rebuildProjection();
-    sequence = result.checkpoint.lastSequence;
-  } catch (error) {
-    return redirectWithQuery("error", getErrorMessage(error));
-  }
-
-  revalidatePath("/");
-  return redirectWithQuery("status", `Projection rebuilt to sequence ${sequence}`);
 }

@@ -24,9 +24,8 @@ npm install sqlmod
 sqlmod migrate generate [name]
 sqlmod migrate apply
 sqlmod migrate status
-sqlmod projector replay [name]
-sqlmod projector reset [name]
 sqlmod db pull
+sqlmod db push
 ```
 
 ## Example Output
@@ -35,8 +34,8 @@ sqlmod db pull
 npx sqlmod migrate status
 # Queued migrate status
 
-npx sqlmod projector replay balances
-# Queued projector replay balances
+npx sqlmod db push
+# Queued db push
 ```
 
 For the TypeScript APIs behind SQLModel applications, see the repository root README and the `@sqlmodel/*` packages.

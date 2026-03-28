@@ -2,7 +2,6 @@ import React from "react";
 import {
   completeTodoAction,
   createTodoAction,
-  rebuildProjectionAction,
   reopenTodoAction
 } from "./actions";
 import { fetchTodos, type TodoListItem } from "../lib/todo-api";
@@ -52,24 +51,24 @@ export default async function Page({
             SQLModel Demo
           </p>
           <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-            End-to-end CQRS todo flow with a Tailwind frontend.
+            End-to-end ORM todo flow with a Tailwind frontend.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-            The Next.js app stays HTTP-only. NestJS owns the aggregate, commands, projector, and
-            query read model behind a minimal REST API.
+            The Next.js app stays HTTP-only. NestJS owns the SQL-backed repository and exposes a
+            minimal CRUD-oriented REST API.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-slate-600">
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
-              Aggregate definition
+              Decorated models
             </span>
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
-              Command handling
+              Repository writes
             </span>
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
-              Projection rebuild
+              SQLite storage
             </span>
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
-              Query reads
+              Ordered reads
             </span>
           </div>
         </div>
@@ -77,7 +76,7 @@ export default async function Page({
         <div className="rounded-[2rem] border border-white/60 bg-slate-950 p-8 text-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
           <h2 className="text-lg font-semibold">Create a todo</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Writes hit the Nest command bus, append events, and fan out to the todos projection.
+            Writes go straight to the ORM repository and persist rows in the backing SQL table.
           </p>
           <form action={createTodoAction} className="mt-6 space-y-4">
             <label className="block text-sm font-medium text-slate-200" htmlFor="title">
@@ -87,7 +86,7 @@ export default async function Page({
               id="title"
               name="title"
               className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-base text-white outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/30"
-              placeholder="Ship the projection replay demo"
+              placeholder="Ship the repository demo"
             />
             <button
               type="submit"
@@ -121,27 +120,17 @@ export default async function Page({
 
       <section className="grid gap-6 lg:grid-cols-[1fr_auto]">
         <div className="rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel)] p-8 backdrop-blur">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold text-slate-900">Projected todo list</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Reads come from the rebuilt projection, not from replaying the stream on demand.
-              </p>
-            </div>
-            <form action={rebuildProjectionAction}>
-              <button
-                type="submit"
-                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-teal-400 hover:text-teal-700"
-              >
-                Rebuild projection
-              </button>
-            </form>
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Todo list</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Reads come straight from the persisted `todos` table with a simple title sort.
+            </p>
           </div>
 
           <div className="mt-6 grid gap-4">
             {todos.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center text-sm text-slate-500">
-                No todos yet. Create one to append `todo.created` and warm the read model.
+                No todos yet. Create one to insert the first row into `todos`.
               </div>
             ) : (
               todos.map((todo) => (
@@ -153,7 +142,7 @@ export default async function Page({
                     <div>
                       <p className="text-lg font-semibold">{todo.title}</p>
                       <p className="mt-1 text-sm">
-                        Stream version {todo.version} · {todo.completed ? "completed" : "open"}
+                        Repository state · {todo.completed ? "completed" : "open"}
                       </p>
                     </div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -185,12 +174,8 @@ export default async function Page({
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-[0.24em] text-slate-400">Projection</dt>
-              <dd className="mt-1">`POST /projectors/todos/rebuild`</dd>
-            </div>
-            <div>
               <dt className="text-xs uppercase tracking-[0.24em] text-slate-400">Persistence</dt>
-              <dd className="mt-1">In-memory only. Restarting the Nest API clears state.</dd>
+              <dd className="mt-1">SQLite-backed ORM client. The demo defaults to an in-memory database.</dd>
             </div>
           </dl>
         </aside>

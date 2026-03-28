@@ -2,18 +2,10 @@ export interface TodoListItem {
   id: string;
   title: string;
   completed: boolean;
-  version: number;
 }
 
 export interface TodoMutationResult {
   todo: TodoListItem;
-}
-
-export interface ProjectionRebuildResult {
-  checkpoint: {
-    projector: string;
-    lastSequence: number;
-  };
 }
 
 function apiBaseUrl(): string {
@@ -60,13 +52,6 @@ export async function completeTodo(id: string): Promise<TodoMutationResult> {
 
 export async function reopenTodo(id: string): Promise<TodoMutationResult> {
   return requestJson<TodoMutationResult>(`/todos/${id}/reopen`, {
-    method: "POST",
-    body: JSON.stringify({})
-  });
-}
-
-export async function rebuildProjection(): Promise<ProjectionRebuildResult> {
-  return requestJson<ProjectionRebuildResult>("/projectors/todos/rebuild", {
     method: "POST",
     body: JSON.stringify({})
   });

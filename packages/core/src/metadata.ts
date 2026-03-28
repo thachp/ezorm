@@ -2,6 +2,7 @@ import type {
   FieldMetadata,
   FieldOptions,
   IndexMetadata,
+  ModelOptions,
   ModelKind,
   ModelMetadata,
   RelationMetadata,
@@ -10,36 +11,19 @@ import type {
 
 const registry = new Map<Function, ModelMetadata>();
 
-function ensureModel(target: Function, kind?: ModelKind): ModelMetadata {
+function ensureModel(target: Function, options?: { kind?: ModelKind; table?: string }): ModelMetadata {
   const existing = registry.get(target);
   if (existing) {
-    if (kind && existing.kind !== kind && existing.kind !== "projection") {
-      // `projection` is only a placeholder internal default before the class decorator runs.
-      throw new Error(`Model ${target.name} is already registered as ${existing.kind}`);
-    }
-    if (kind) {
-      existing.kind = kind;
-    }
+    existing.kind = options?.kind ?? existing.kind;
+    existing.table = options?.table ?? existing.table;
     return existing;
   }
 
-  if (!kind) {
-    const placeholder: ModelMetadata = {
-      kind: "projection",
-      target,
-      name: target.name,
-      fields: [],
-      indices: [],
-      relations: []
-    };
-    registry.set(target, placeholder);
-    return placeholder;
-  }
-
   const metadata: ModelMetadata = {
-    kind,
+    kind: options?.kind ?? "model",
     target,
     name: target.name,
+    table: options?.table ?? defaultTableName(target.name),
     fields: [],
     indices: [],
     relations: []
@@ -75,19 +59,25 @@ function addRelation(target: object, propertyKey: string | symbol, relation: Omi
 
 export function Aggregate(): ClassDecorator {
   return (target) => {
-    ensureModel(target, "aggregate");
+    ensureModel(target, { kind: "model" });
   };
 }
 
 export function Projection(): ClassDecorator {
   return (target) => {
-    ensureModel(target, "projection");
+    ensureModel(target, { kind: "model" });
   };
 }
 
 export function Event(): ClassDecorator {
   return (target) => {
-    ensureModel(target, "event");
+    ensureModel(target, { kind: "model" });
+  };
+}
+
+export function Model(options: ModelOptions = {}): ClassDecorator {
+  return (target) => {
+    ensureModel(target, { kind: "model", table: options.table ?? defaultTableName(target.name) });
   };
 }
 
@@ -209,4 +199,11 @@ function cloneMetadata(value: ModelMetadata): ModelMetadata {
     indices: value.indices.map((index) => ({ ...index, fields: [...index.fields] })),
     relations: value.relations.map((relation) => ({ ...relation }))
   };
+}
+
+function defaultTableName(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/\s+/g, "_")
+    .toLowerCase();
 }

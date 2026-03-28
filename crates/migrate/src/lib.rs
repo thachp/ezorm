@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlmodel_dialects::SqlDialect;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionTable {
+pub struct ModelTable {
     pub name: String,
     pub columns: Vec<String>,
 }
@@ -13,10 +13,10 @@ pub struct MigrationPlan {
     pub blocked_changes: Vec<String>,
 }
 
-pub fn plan_projection_sync(
+pub fn plan_model_sync(
     dialect: SqlDialect,
-    desired: &ProjectionTable,
-    actual: Option<&ProjectionTable>,
+    desired: &ModelTable,
+    actual: Option<&ModelTable>,
 ) -> MigrationPlan {
     match actual {
         None => MigrationPlan {
@@ -57,42 +57,42 @@ mod tests {
 
     #[test]
     fn plans_additive_changes_only() {
-        let desired = ProjectionTable {
-            name: "account_projection".into(),
+        let desired = ModelTable {
+            name: "accounts".into(),
             columns: vec![
                 "id TEXT".into(),
                 "balance INTEGER".into(),
                 "currency TEXT".into(),
             ],
         };
-        let actual = ProjectionTable {
-            name: "account_projection".into(),
+        let actual = ModelTable {
+            name: "accounts".into(),
             columns: vec!["id TEXT".into(), "balance INTEGER".into()],
         };
 
-        let plan = plan_projection_sync(SqlDialect::Sqlite, &desired, Some(&actual));
+        let plan = plan_model_sync(SqlDialect::Sqlite, &desired, Some(&actual));
         assert_eq!(
             plan.safe_statements,
-            vec!["ALTER TABLE account_projection ADD COLUMN currency TEXT"]
+            vec!["ALTER TABLE accounts ADD COLUMN currency TEXT"]
         );
         assert!(plan.blocked_changes.is_empty());
     }
 
     #[test]
     fn blocks_destructive_drift() {
-        let desired = ProjectionTable {
-            name: "account_projection".into(),
+        let desired = ModelTable {
+            name: "accounts".into(),
             columns: vec!["id TEXT".into()],
         };
-        let actual = ProjectionTable {
-            name: "account_projection".into(),
+        let actual = ModelTable {
+            name: "accounts".into(),
             columns: vec!["id TEXT".into(), "balance INTEGER".into()],
         };
 
-        let plan = plan_projection_sync(SqlDialect::Sqlite, &desired, Some(&actual));
+        let plan = plan_model_sync(SqlDialect::Sqlite, &desired, Some(&actual));
         assert_eq!(
             plan.blocked_changes,
-            vec!["Destructive drift detected for account_projection.balance INTEGER"]
+            vec!["Destructive drift detected for accounts.balance INTEGER"]
         );
     }
 }

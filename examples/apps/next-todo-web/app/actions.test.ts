@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   completeTodo: vi.fn(),
   createTodo: vi.fn(),
-  rebuildProjection: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`);
   }),
@@ -22,14 +21,12 @@ vi.mock("next/navigation", () => ({
 vi.mock("../lib/todo-api", () => ({
   completeTodo: mocks.completeTodo,
   createTodo: mocks.createTodo,
-  rebuildProjection: mocks.rebuildProjection,
   reopenTodo: mocks.reopenTodo
 }));
 
 import {
   completeTodoAction,
-  createTodoAction,
-  rebuildProjectionAction
+  createTodoAction
 } from "./actions";
 
 describe("@sqlmodel/example-next-todo-web actions", () => {
@@ -41,10 +38,10 @@ describe("@sqlmodel/example-next-todo-web actions", () => {
     mocks.createTodo.mockResolvedValue({ todo: { id: "todo-1" } });
 
     const formData = new FormData();
-    formData.set("title", "Review events");
+    formData.set("title", "Review schema");
 
     await expect(createTodoAction(formData)).rejects.toThrow("REDIRECT:/?status=Todo%20created");
-    expect(mocks.createTodo).toHaveBeenCalledWith("Review events");
+    expect(mocks.createTodo).toHaveBeenCalledWith("Review schema");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/");
   });
 
@@ -58,19 +55,5 @@ describe("@sqlmodel/example-next-todo-web actions", () => {
       "REDIRECT:/?status=Todo%20completed"
     );
     expect(mocks.completeTodo).toHaveBeenCalledWith("todo-1");
-  });
-
-  it("reports projection rebuild status", async () => {
-    mocks.rebuildProjection.mockResolvedValue({
-      checkpoint: {
-        projector: "todos-list",
-        lastSequence: 4
-      }
-    });
-
-    await expect(rebuildProjectionAction()).rejects.toThrow(
-      "REDIRECT:/?status=Projection%20rebuilt%20to%20sequence%204"
-    );
-    expect(mocks.rebuildProjection).toHaveBeenCalledOnce();
   });
 });

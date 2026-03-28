@@ -1,10 +1,9 @@
 {
-  "name": "@sqlmodel/runtime-proxy",
+  "name": "@sqlmodel/orm",
   "version": "0.1.0",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@sqlmodel/core": "0.1.0",
-    "@sqlmodel/orm": "0.1.0"
+    "@sqlmodel/core": "0.1.0"
   }
 }

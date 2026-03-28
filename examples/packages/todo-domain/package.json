@@ -8,7 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sqlmodel/cqrs": "workspace:*",
-    "@sqlmodel/events": "workspace:*"
+    "@sqlmodel/core": "workspace:*",
+    "@sqlmodel/orm": "workspace:*"
   }
 }
