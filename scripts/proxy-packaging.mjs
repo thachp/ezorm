@@ -12,7 +12,6 @@ export const RELEASED_PROXY_TARGET_TRIPLES = [
   "aarch64-apple-darwin",
   "x86_64-pc-windows-msvc"
 ];
-const NPM_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
 
 const BINARY_PACKAGE_BY_TARGET = {
   "aarch64-apple-darwin": "@ezorm/proxy-bin-aarch64-apple-darwin",
@@ -68,13 +67,23 @@ export function packCurrentPlatformBinaryPackage(outputDir) {
 }
 
 export function packNpmPackage(packageDir, outputDir) {
-  const result = spawnSync(NPM_COMMAND, ["pack", "--json", "--pack-destination", outputDir], {
+  const invocation =
+    process.platform === "win32"
+      ? {
+          command: "cmd.exe",
+          args: ["/d", "/s", "/c", "npm", "pack", "--json", "--pack-destination", outputDir]
+        }
+      : {
+          command: "npm",
+          args: ["pack", "--json", "--pack-destination", outputDir]
+        };
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: packageDir,
     encoding: "utf8"
   });
 
   if (result.error) {
-    throw new Error(`Failed to start ${NPM_COMMAND} pack in ${packageDir}: ${result.error.message}`);
+    throw new Error(`Failed to start ${invocation.command} pack in ${packageDir}: ${result.error.message}`);
   }
 
   if (result.status !== 0) {
