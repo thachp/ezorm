@@ -174,7 +174,7 @@ describe("ezorm CLI", () => {
       const pushResult = runCliBinary(["db", "push"], directory);
       expect(pushResult.status).toBe(0);
       expect(pushResult.stdout).toContain('CREATE TABLE IF NOT EXISTS "todos"');
-      expect(pushResult.stderr).toBe("");
+      expect(stripBenignSqliteExperimentalWarnings(pushResult.stderr)).toBe("");
     },
     15_000
   );
@@ -216,6 +216,19 @@ describe("ezorm CLI", () => {
     expect(io.errors.join("\n")).toContain("Found multiple Ezorm config files");
     expect(io.errors.join("\n")).toContain("ezorm.config.ts");
     expect(io.errors.join("\n")).toContain("ezorm.config.mjs");
+  });
+
+  it("strips only the benign SQLite experimental warning from published-bin stderr", () => {
+    const stderr = [
+      "(node:3187) ExperimentalWarning: SQLite is an experimental feature and might change at any time",
+      "(Use `node --trace-warnings ...` to show where the warning was created)",
+      "(node:3169) ExperimentalWarning: SQLite is an experimental feature and might change at any time",
+      "(Use `node --trace-warnings ...` to show where the warning was created)",
+      ""
+    ].join("\n");
+
+    expect(stripBenignSqliteExperimentalWarnings(stderr)).toBe("");
+    expect(stripBenignSqliteExperimentalWarnings(`${stderr}Unexpected error`)).toBe("Unexpected error");
   });
 
   it("initializes a TypeScript project, patches tsconfig, and creates a todo model", async () => {
@@ -1018,6 +1031,15 @@ function runCliBinary(argv: string[], cwd: string) {
     cwd,
     encoding: "utf8"
   });
+}
+
+function stripBenignSqliteExperimentalWarnings(stderr: string): string {
+  return stderr
+    .replaceAll(
+      /^\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(?:\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n)?/gm,
+      ""
+    )
+    .trim();
 }
 
 function createIo() {
