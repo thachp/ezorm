@@ -1,6 +1,6 @@
 {
   "name": "@ezorm/next",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Next.js adapters for direct Ezorm node clients and proxy-backed edge clients.",
   "license": "MIT",
   "repository": {
@@ -9,10 +9,10 @@
   },
   "type": "module",
   "dependencies": {
-    "@ezorm/orm": "0.1.0",
-    "@ezorm/proxy-node": "0.1.0",
-    "@ezorm/runtime-node": "0.1.0",
-    "@ezorm/runtime-proxy": "0.1.0"
+    "@ezorm/orm": "1.1.0",
+    "@ezorm/proxy-node": "1.1.0",
+    "@ezorm/runtime-node": "1.1.0",
+    "@ezorm/runtime-proxy": "1.1.0"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

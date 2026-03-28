@@ -1,6 +1,6 @@
 {
   "name": "@ezorm/runtime-node",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Direct Node.js runtime helper for Ezorm SQLite ORM flows.",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@ezorm/orm": "0.1.0"
+    "@ezorm/orm": "1.1.0"
   },
   "publishConfig": {
     "access": "public"
