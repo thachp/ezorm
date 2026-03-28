@@ -12,11 +12,16 @@ export interface TodoMutationResult {
   todo: TodoRecord;
 }
 
+export interface TodoCreateInput {
+  id?: string;
+  title: string;
+}
+
 export interface TodoDemoServices {
   client: OrmClient;
   repository: Repository<TodoRecord>;
   listTodos(): Promise<TodoRecord[]>;
-  createTodo(input: { id?: string; title: string }): Promise<TodoMutationResult>;
+  createTodo(input: TodoCreateInput): Promise<TodoMutationResult>;
   completeTodo(id: string): Promise<TodoMutationResult>;
   reopenTodo(id: string): Promise<TodoMutationResult>;
   close(): Promise<void>;
@@ -35,6 +40,48 @@ export class TodoModel {
   completed!: boolean;
 }
 
+export async function pushTodoSchema(client: Pick<OrmClient, "pushSchema">): Promise<void> {
+  await client.pushSchema([TodoModel]);
+}
+
+export async function listTodos(repository: Repository<TodoRecord>): Promise<TodoRecord[]> {
+  return repository.findMany({
+    orderBy: { field: "title", direction: "asc" }
+  });
+}
+
+export async function createTodo(
+  repository: Repository<TodoRecord>,
+  input: TodoCreateInput
+): Promise<TodoMutationResult> {
+  const todo = await repository.create({
+    id: input.id ?? randomUUID(),
+    title: input.title.trim(),
+    completed: false
+  });
+  return { todo };
+}
+
+export async function completeTodo(
+  repository: Repository<TodoRecord>,
+  id: string
+): Promise<TodoMutationResult> {
+  const todo = await requireTodo(repository, id);
+  return {
+    todo: await repository.update(id, { completed: true })
+  };
+}
+
+export async function reopenTodo(
+  repository: Repository<TodoRecord>,
+  id: string
+): Promise<TodoMutationResult> {
+  const todo = await requireTodo(repository, id);
+  return {
+    todo: await repository.update(id, { completed: false })
+  };
+}
+
 export async function createTodoDemoServices(options?: {
   client?: OrmClient;
   databaseUrl?: string;
@@ -44,50 +91,26 @@ export async function createTodoDemoServices(options?: {
   }));
   const repository = client.repository(TodoModel);
 
-  await client.pushSchema([TodoModel]);
-
-  async function createTodo(input: { id?: string; title: string }): Promise<TodoMutationResult> {
-    const todo = await repository.create({
-      id: input.id ?? randomUUID(),
-      title: input.title.trim(),
-      completed: false
-    });
-    return { todo };
-  }
-
-  async function completeTodo(id: string): Promise<TodoMutationResult> {
-    const todo = await repository.findById(id);
-    if (!todo) {
-      throw new Error(`Todo ${id} does not exist`);
-    }
-    return {
-      todo: await repository.update(id, { completed: true })
-    };
-  }
-
-  async function reopenTodo(id: string): Promise<TodoMutationResult> {
-    const todo = await repository.findById(id);
-    if (!todo) {
-      throw new Error(`Todo ${id} does not exist`);
-    }
-    return {
-      todo: await repository.update(id, { completed: false })
-    };
-  }
-
-  async function listTodos(): Promise<TodoRecord[]> {
-    return repository.findMany({
-      orderBy: { field: "title", direction: "asc" }
-    });
-  }
+  await pushTodoSchema(client);
 
   return {
     client,
     repository,
-    listTodos,
-    createTodo,
-    completeTodo,
-    reopenTodo,
+    listTodos: () => listTodos(repository),
+    createTodo: (input) => createTodo(repository, input),
+    completeTodo: (id) => completeTodo(repository, id),
+    reopenTodo: (id) => reopenTodo(repository, id),
     close: () => client.close()
   };
+}
+
+async function requireTodo(
+  repository: Repository<TodoRecord>,
+  id: string
+): Promise<TodoRecord> {
+  const todo = await repository.findById(id);
+  if (!todo) {
+    throw new Error(`Todo ${id} does not exist`);
+  }
+  return todo;
 }

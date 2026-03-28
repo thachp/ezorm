@@ -1,6 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { Injectable, type OnModuleInit } from "@nestjs/common";
 import {
+  completeTodo as completeTodoWithRepository,
+  createTodo as createTodoWithRepository,
+  listTodos as listTodosWithRepository,
+  pushTodoSchema,
+  reopenTodo as reopenTodoWithRepository,
   TodoModel,
   type TodoMutationResult,
   type TodoRecord
@@ -17,44 +21,22 @@ export class TodosService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.client.pushSchema([TodoModel]);
+    await pushTodoSchema(this.client);
   }
 
   async listTodos(): Promise<TodoRecord[]> {
-    return this.repository.findMany({
-      orderBy: { field: "title", direction: "asc" }
-    });
+    return listTodosWithRepository(this.repository);
   }
 
   async createTodo(input: { title: string }): Promise<TodoMutationResult> {
-    return {
-      todo: await this.repository.create({
-        id: randomUUID(),
-        title: input.title.trim(),
-        completed: false
-      })
-    };
+    return createTodoWithRepository(this.repository, input);
   }
 
   async completeTodo(id: string): Promise<TodoMutationResult> {
-    const todo = await this.requireTodo(id);
-    return {
-      todo: await this.repository.update(todo.id, { completed: true })
-    };
+    return completeTodoWithRepository(this.repository, id);
   }
 
   async reopenTodo(id: string): Promise<TodoMutationResult> {
-    const todo = await this.requireTodo(id);
-    return {
-      todo: await this.repository.update(todo.id, { completed: false })
-    };
-  }
-
-  private async requireTodo(id: string): Promise<TodoRecord> {
-    const todo = await this.repository.findById(id);
-    if (!todo) {
-      throw new Error(`Todo ${id} does not exist`);
-    }
-    return todo;
+    return reopenTodoWithRepository(this.repository, id);
   }
 }

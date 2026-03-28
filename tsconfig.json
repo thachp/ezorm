@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@ezorm/core": ["packages/core/src/index.ts"],
+      "@ezorm/example-todo-domain": ["examples/packages/todo-domain/src/index.ts"],
       "@ezorm/orm": ["packages/orm/src/index.ts"],
       "@ezorm/proxy-node": ["packages/proxy-node/src/index.ts"],
       "@ezorm/runtime-node": ["packages/runtime-node/src/index.ts"],
