@@ -113,10 +113,10 @@ importers:
   packages/cli:
     dependencies:
       '@ezorm/core':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../core
       '@ezorm/orm':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../orm
       tsx:
         specifier: ^4.21.0
@@ -130,10 +130,10 @@ importers:
   packages/nestjs:
     dependencies:
       '@ezorm/orm':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../orm
       '@ezorm/runtime-node':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../runtime-node
       '@nestjs/common':
         specifier: ^11.0.0
@@ -142,22 +142,22 @@ importers:
   packages/next:
     dependencies:
       '@ezorm/orm':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../orm
       '@ezorm/proxy-node':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../proxy-node
       '@ezorm/runtime-node':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../runtime-node
       '@ezorm/runtime-proxy':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../runtime-proxy
 
   packages/orm:
     dependencies:
       '@ezorm/core':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../core
       mssql:
         specifier: ^11.0.1
@@ -184,31 +184,31 @@ importers:
   packages/proxy-node:
     optionalDependencies:
       '@ezorm/proxy-bin-aarch64-apple-darwin':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../proxy-bin-aarch64-apple-darwin
       '@ezorm/proxy-bin-x86_64-apple-darwin':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../proxy-bin-x86_64-apple-darwin
       '@ezorm/proxy-bin-x86_64-pc-windows-msvc':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../proxy-bin-x86_64-pc-windows-msvc
       '@ezorm/proxy-bin-x86_64-unknown-linux-gnu':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../proxy-bin-x86_64-unknown-linux-gnu
 
   packages/runtime-node:
     dependencies:
       '@ezorm/orm':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../orm
 
   packages/runtime-proxy:
     dependencies:
       '@ezorm/core':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../core
       '@ezorm/orm':
-        specifier: 1.1.1
+        specifier: 1.1.2
         version: link:../orm
 
 packages:

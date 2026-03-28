@@ -1,6 +1,6 @@
 {
   "name": "@ezorm/nestjs",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "NestJS DI adapter for Ezorm ORM clients and repositories.",
   "license": "MIT",
   "repository": {
@@ -26,8 +26,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@ezorm/orm": "1.1.1",
-    "@ezorm/runtime-node": "1.1.1"
+    "@ezorm/orm": "1.1.2",
+    "@ezorm/runtime-node": "1.1.2"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0"

@@ -440,9 +440,11 @@ Ezorm keeps a few design choices explicit:
 
 Use the committed package manifests as the source of truth for npm releases.
 
-1. Update versions with `pnpm version:workspace <version>`.
-2. Commit and merge the version bump to `main`.
-3. GitHub Actions publishes the npm packages automatically and pushes `v<version>` after the publish step succeeds.
+1. Choose the smallest semver bump that matches the change scope.
+2. Update versions with `pnpm version:workspace <version>`.
+3. Refresh `pnpm-lock.yaml` with `pnpm install --lockfile-only`.
+4. Commit the manifest and lockfile changes together, then merge to `main`.
+5. GitHub Actions publishes the npm packages automatically and pushes `v<version>` after the publish step succeeds.
 
 ## License
 

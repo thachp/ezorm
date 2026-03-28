@@ -7,6 +7,8 @@
 - Model metadata primitives live in `packages/core`, and the primary ORM/runtime workflow lives in `packages/orm`.
 - Direct `@ezorm/orm` execution is the primary Node-side relational ORM surface for SQLite, PostgreSQL, MySQL, and MSSQL.
 - `@ezorm/runtime-node` is a thin wrapper over `@ezorm/orm`.
+- `@ezorm/next` is the maintained Next.js adapter for direct Node runtimes and proxy-backed edge runtimes.
+- `@ezorm/nestjs` is the maintained NestJS DI adapter for direct ORM clients and repositories.
 - Proxy-backed cross-database execution still lives behind `packages/runtime-proxy`, `packages/proxy-node`, `crates/orm_runtime`, and the managed proxy binary.
 - Runnable examples live under `examples/apps`, and shared example-only code lives under `examples/packages`.
 - The maintained todo examples use decorated models plus repository CRUD over SQLite-backed storage; the demo defaults to `sqlite::memory:` so process restarts clear data.
@@ -19,7 +21,8 @@
 - Prefer the root validation commands that already exist: `pnpm typecheck`, `pnpm test:ts`, `pnpm test`, and `cargo test`.
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared ORM/repository helpers instead of reimplementing it inline.
 - Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/edge`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
-- npm release preparation should go through `pnpm version:workspace <version>` committed and merged to `main`, which automatically triggers the `Release npm Packages` GitHub Actions workflow.
+- npm release preparation should automatically choose the smallest semver bump that matches the change scope, run `pnpm version:workspace <version>`, then run `pnpm install --lockfile-only` so `pnpm-lock.yaml` stays in sync before committing and merging to `main`.
+- Commit workspace version bumps and `pnpm-lock.yaml` together. CI and release both use `pnpm install --frozen-lockfile`, so manifest-only version bumps are invalid and will fail the build.
 - Keep the release workflow on Node 22 to match the validated CI/runtime baseline unless the workspace Node version is intentionally raised everywhere.
 - The release workflow packages the Intel macOS proxy binary on GitHub-hosted `macos-15-intel`; keep release runner labels aligned with currently supported GitHub-hosted images.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
@@ -28,6 +31,7 @@
 
 Root scripts:
 
+- `pnpm build`
 - `pnpm build:ts`
 - `pnpm build:packages`
 - `pnpm build:proxy-node`
@@ -94,6 +98,7 @@ Current example workflows:
 - Keep docs aligned with the ORM-first surface. Do not reintroduce alternate non-ORM workflows into maintained examples or top-level documentation.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
 - Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.
+- Do not merge workspace package version changes without refreshing `pnpm-lock.yaml`; frozen-lockfile installs in CI and release must succeed from committed files alone.
 - The todo examples intentionally default to SQLite in-memory storage in v1, so docs should note that process restarts clear state.
 
 ## Commit Guidelines
