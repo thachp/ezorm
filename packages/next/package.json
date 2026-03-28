@@ -2,6 +2,11 @@
   "name": "@sqlmodel/next",
   "version": "0.1.0",
   "type": "module",
+  "dependencies": {
+    "@sqlmodel/proxy-node": "0.1.0",
+    "@sqlmodel/runtime-node": "0.1.0",
+    "@sqlmodel/runtime-proxy": "0.1.0"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts",

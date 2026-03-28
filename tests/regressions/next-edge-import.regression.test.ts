@@ -11,5 +11,10 @@ describe("regression: next-edge-import", () => {
 
     expect(() => assertEdgeSafeImport(source)).not.toThrow();
   });
-});
 
+  it("rejects managed proxy imports in edge modules", () => {
+    expect(() => assertEdgeSafeImport('import "@sqlmodel/proxy-node";')).toThrow(
+      "Edge runtime modules must not import @sqlmodel/proxy-node"
+    );
+  });
+});

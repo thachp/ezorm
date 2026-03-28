@@ -1,0 +1,15 @@
+{
+  "name": "@sqlmodel/proxy-bin-x86_64-unknown-linux-gnu",
+  "version": "0.1.0",
+  "description": "Prebuilt sqlmodel_proxy binary for x86_64-unknown-linux-gnu.",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "bin": {
+    "sqlmodel_proxy": "./bin/sqlmodel_proxy"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ]
+}

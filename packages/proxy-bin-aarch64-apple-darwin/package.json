@@ -1,0 +1,15 @@
+{
+  "name": "@sqlmodel/proxy-bin-aarch64-apple-darwin",
+  "version": "0.1.0",
+  "description": "Prebuilt sqlmodel_proxy binary for aarch64-apple-darwin.",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "bin": {
+    "sqlmodel_proxy": "./bin/sqlmodel_proxy"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ]
+}

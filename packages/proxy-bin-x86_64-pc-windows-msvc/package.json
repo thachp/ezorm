@@ -1,0 +1,15 @@
+{
+  "name": "@sqlmodel/proxy-bin-x86_64-pc-windows-msvc",
+  "version": "0.1.0",
+  "description": "Prebuilt sqlmodel_proxy binary for x86_64-pc-windows-msvc.",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "bin": {
+    "sqlmodel_proxy": "./bin/sqlmodel_proxy.exe"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ]
+}

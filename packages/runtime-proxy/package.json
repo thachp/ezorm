@@ -2,6 +2,8 @@
   "name": "@sqlmodel/runtime-proxy",
   "version": "0.1.0",
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@sqlmodel/events": "0.1.0"
+  }
 }
-

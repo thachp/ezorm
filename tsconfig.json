@@ -18,6 +18,7 @@
       "@sqlmodel/core": ["packages/core/src/index.ts"],
       "@sqlmodel/cqrs": ["packages/cqrs/src/index.ts"],
       "@sqlmodel/events": ["packages/events/src/index.ts"],
+      "@sqlmodel/proxy-node": ["packages/proxy-node/src/index.ts"],
       "@sqlmodel/runtime-node": ["packages/runtime-node/src/index.ts"],
       "@sqlmodel/runtime-proxy": ["packages/runtime-proxy/src/index.ts"],
       "@sqlmodel/next": ["packages/next/src/index.ts"],

@@ -1,0 +1,35 @@
+{
+  "name": "@sqlmodel/proxy-node",
+  "version": "0.1.0",
+  "description": "Server-side lifecycle management for the SQLModel Rust proxy.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@sqlmodel/proxy-bin-aarch64-apple-darwin": "0.1.0",
+    "@sqlmodel/proxy-bin-aarch64-pc-windows-msvc": "0.1.0",
+    "@sqlmodel/proxy-bin-aarch64-unknown-linux-gnu": "0.1.0",
+    "@sqlmodel/proxy-bin-x86_64-apple-darwin": "0.1.0",
+    "@sqlmodel/proxy-bin-x86_64-pc-windows-msvc": "0.1.0",
+    "@sqlmodel/proxy-bin-x86_64-unknown-linux-gnu": "0.1.0"
+  },
+  "scripts": {
+    "build": "node ./scripts/build-package.mjs",
+    "prepack": "pnpm run build"
+  }
+}

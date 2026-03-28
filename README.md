@@ -8,6 +8,7 @@
 
 - `@sqlmodel/events` defines domain events, stored events, snapshots, versioned writes, and event store contracts.
 - `@sqlmodel/cqrs` provides `CommandBus`, `QueryBus`, typed command/query definitions, and projector registration.
+- `@sqlmodel/proxy-node` manages packaged Rust proxy binaries from server-side Node.js code.
 - `@sqlmodel/runtime-node` exposes a Node.js runtime backed by native bindings or an in-memory fallback.
 - `@sqlmodel/runtime-proxy` talks to the Rust HTTP proxy for edge and remote runtimes.
 - `@sqlmodel/next` adds Next.js helpers for Node and edge runtime wiring.
@@ -152,10 +153,30 @@ This path goes through `@sqlmodel/runtime-node`, which can connect to the native
 
 ### Next.js Edge Runtime Quickstart
 
-Start the Rust proxy first:
+For local development and self-hosted Node deployments, start the proxy from server-side Node.js code:
 
 ```sh
-DATABASE_URL=sqlite://sqlmodel.db cargo run -p sqlmodel_proxy
+pnpm add @sqlmodel/proxy-node
+```
+
+```ts
+import { ensureSqlModelProxy } from "@sqlmodel/proxy-node";
+
+const { endpoint } = await ensureSqlModelProxy({
+  databaseUrl: process.env.DATABASE_URL!
+});
+
+console.log(endpoint);
+```
+
+`@sqlmodel/next/node` exposes the same bootstrap as a convenience helper:
+
+```ts
+import { ensureNextEdgeProxy } from "@sqlmodel/next/node";
+
+const endpoint = await ensureNextEdgeProxy({
+  databaseUrl: process.env.DATABASE_URL!
+});
 ```
 
 Then point your edge code at that endpoint:
@@ -165,9 +186,7 @@ import { createNextEdgeRuntime } from "@sqlmodel/next/edge";
 
 export const runtime = "edge";
 
-const sqlmodel = createNextEdgeRuntime(
-  process.env.SQLMODEL_PROXY_URL ?? "http://127.0.0.1:3000"
-);
+const sqlmodel = createNextEdgeRuntime(process.env.SQLMODEL_PROXY_URL!);
 
 export const store = sqlmodel.store;
 ```
@@ -175,8 +194,11 @@ export const store = sqlmodel.store;
 Current boundary for edge usage:
 
 - Edge modules must not import `@sqlmodel/runtime-node`.
+- Edge modules must not import `@sqlmodel/proxy-node`.
 - Edge requests should go through `@sqlmodel/runtime-proxy`.
-- The Rust proxy listens on `127.0.0.1:3000` by default and accepts optional `HOST` and `PORT` overrides.
+- `ensureSqlModelProxy()` and `ensureNextEdgeProxy()` are server-only helpers for local and self-hosted Node environments.
+- Hosted edge deployments still need an externally reachable `SQLMODEL_PROXY_URL`.
+- The managed launcher keeps `DATABASE_URL` explicit and accepts optional `host` and `port` overrides when you need a stable endpoint.
 
 ## Use With NestJS
 
@@ -209,20 +231,14 @@ If you want the raw Nest provider descriptors instead of the module wrapper, use
 
 ## Local Demo Workflow
 
-1. Start the proxy if you want a relational runtime for edge or remote clients.
-
-```sh
-DATABASE_URL=sqlite://sqlmodel.db cargo run -p sqlmodel_proxy
-```
-
-2. Build the local CLI and inspect the current command surface.
+1. Build the local CLI and inspect the current command surface.
 
 ```sh
 pnpm build:sqlmod
 node packages/cli/bin/sqlmod.js --help
 ```
 
-3. Demo any current CLI workflow from the workspace.
+2. Demo any current CLI workflow from the workspace.
 
 ```sh
 node packages/cli/bin/sqlmod.js migrate status
@@ -230,10 +246,10 @@ node packages/cli/bin/sqlmod.js projector replay balances
 node packages/cli/bin/sqlmod.js db pull
 ```
 
-4. Choose the framework/runtime path that matches your app:
+3. Choose the framework/runtime path that matches your app:
 
 - Next.js Node runtime: `createNextNodeRuntime()`
-- Next.js Edge runtime: `createNextEdgeRuntime()`
+- Next.js Edge runtime: `ensureNextEdgeProxy()` plus `createNextEdgeRuntime()`
 - NestJS API service: `SqlModelModule.forRoot(...)` or `createSqlModelProviders(...)`
 
 ## Validate The Workspace
@@ -248,6 +264,10 @@ pnpm test
 Packaging and smoke-test workflows:
 
 ```sh
+pnpm build:proxy-node
+pnpm pack:proxy-node
+pnpm smoke:proxy-node
+pnpm release:proxy-node
 pnpm build:sqlmod
 pnpm pack:sqlmod
 pnpm smoke:sqlmod

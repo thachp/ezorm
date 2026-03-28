@@ -7,7 +7,7 @@
 - CQRS and event-sourcing primitives live in `packages/cqrs` and `packages/events`.
 - Runnable examples live under `examples/apps`, and shared example-only code lives under `examples/packages`.
 - Relational persistence support exists for the event store, snapshots, and projection checkpoints; projector replay/reset adapters should route through shared engine/runtime primitives instead of in-memory-only state.
-- The HTTP runtime proxy lives in `crates/proxy`, and edge-facing TypeScript clients should use `packages/runtime-proxy` instead of importing native bindings.
+- The HTTP runtime proxy lives in `crates/proxy`, packaged Node-side lifecycle management lives in `packages/proxy-node`, and edge-facing TypeScript clients should use `packages/runtime-proxy` plus `packages/next/node` or `packages/proxy-node` instead of documenting manual Cargo startup.
 - Keep workflow documentation aligned with the actual workspace surface before adding new commands or adapters.
 
 ## Preferred Workflow
@@ -15,6 +15,7 @@
 - Inspect the current package, crate, and CLI surface before adding a new workflow command or query.
 - Prefer the root validation commands that already exist: `pnpm typecheck`, `pnpm test:ts`, `pnpm test`, and `cargo test`.
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared CQRS handlers instead of reimplementing it inline.
+- Proxy bootstrap should go through `@sqlmodel/proxy-node` or `@sqlmodel/next/node`; do not reintroduce manual `cargo run -p sqlmodel_proxy` as the default developer workflow.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
 
 ## Common Commands
@@ -22,19 +23,22 @@
 Root scripts:
 
 - `pnpm build:ts`
+- `pnpm build:proxy-node`
 - `pnpm build:sqlmod`
 - `pnpm example:build`
 - `pnpm example:nest:dev`
 - `pnpm example:next:dev`
 - `pnpm example:test`
+- `pnpm pack:proxy-node`
 - `pnpm typecheck`
 - `pnpm pack:sqlmod`
+- `pnpm smoke:proxy-node`
 - `pnpm smoke:sqlmod`
+- `pnpm release:proxy-node`
 - `pnpm release:sqlmod`
 - `pnpm test:ts`
 - `pnpm test`
 - `cargo test`
-- `DATABASE_URL=sqlite://sqlmodel.db cargo run -p sqlmodel_proxy`
 
 Current CLI command workflows:
 
@@ -67,6 +71,7 @@ Current example workflows:
 ## Guardrails
 
 - Do not document commands or queries that are not implemented in code.
+- Do not document manual Cargo proxy startup as the default edge or remote runtime workflow when the managed Node launcher covers the same path.
 - Keep command and query classifications one-way in docs and code. If a command starts returning read-model behavior, split that behavior into a separate query.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
 - Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.

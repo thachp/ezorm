@@ -2,7 +2,7 @@ use axum::{
     extract::{rejection::JsonRejection, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,7 @@ pub async fn create_proxy_app(database_url: &str) -> Result<Router, ProxyHttpErr
 
 pub fn create_router(store: SqlEventStore) -> Router {
     Router::new()
+        .route("/healthz", get(health))
         .route("/events/load", post(load_events))
         .route("/events/load-all", post(load_all_events))
         .route("/events/append", post(append_events))
@@ -176,6 +177,10 @@ impl From<JsonRejection> for ProxyHttpError {
     fn from(rejection: JsonRejection) -> Self {
         Self::BadRequest(rejection.body_text())
     }
+}
+
+async fn health() -> StatusCode {
+    StatusCode::OK
 }
 
 async fn load_events(
@@ -270,6 +275,24 @@ mod tests {
         let body: LoadStreamResponse = read_json(response).await;
 
         assert!(body.events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn healthcheck_reports_ready() {
+        let app = create_proxy_app("sqlite::memory:").await.unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
