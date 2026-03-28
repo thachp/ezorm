@@ -220,14 +220,14 @@ Example:
 ```ts
 export default {
   databaseUrl: "sqlite:///tmp/ezorm.db",
-  modelPaths: ["src"],
+  modelPaths: ["src/models"],
   migrationsDir: "migrations"
 };
 ```
 
-If `models` is omitted, the CLI scans `modelPaths` and imports files containing `@Model` or `Model(...)` before deriving schema metadata. Explicit `models` still override scan mode.
+If `models` is omitted, the CLI scans `modelPaths` and imports files containing `@Model` or `Model(...)` before deriving schema metadata. Generated configs prefer `src/models` or `models`. Explicit `models` still override scan mode, and broad scan roots such as `["src"]` or `["."]` may import unrelated matching modules.
 
-Use `npx ezorm init` to scaffold the config in the nearest package root, add a minimal Todo model when the project does not already have one, and patch `tsconfig.json` for decorator support in TypeScript projects.
+Use `npx ezorm init` to scaffold the config in the nearest package root, add a minimal Todo model when the project does not already have one, and patch `tsconfig.json` for decorator support in TypeScript projects. TypeScript and JavaScript scaffolds default `modelPaths` to `["src/models"]` when `src/` exists or `["models"]` otherwise.
 
 TypeScript config files can still import decorator-authored `.ts` model classes directly. JavaScript config files remain supported for ESM and CommonJS projects.
 

@@ -1,3 +1,8 @@
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BelongsTo,
@@ -204,4 +209,114 @@ describe("@ezorm/core", () => {
       "Model CachedModel cache ttlSeconds must be a positive integer"
     );
   });
+
+  it("shares metadata across package copies loaded through tsx in one process", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ezorm-core-shared-"));
+
+    try {
+      await createExternalCorePackageCopy(directory);
+      await writeFile(
+        join(directory, "tsconfig.json"),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              target: "ES2022",
+              module: "ESNext",
+              experimentalDecorators: true,
+              emitDecoratorMetadata: true
+            }
+          },
+          null,
+          2
+        ) + "\n",
+        "utf8"
+      );
+      await mkdir(join(directory, "models"), { recursive: true });
+      await writeFile(
+        join(directory, "models", "todo.ts"),
+        [
+          'import { Field, Model, PrimaryKey } from "@ezorm/core";',
+          "",
+          '@Model({ table: "todos" })',
+          "export class Todo {",
+          "  @PrimaryKey()",
+          "  @Field.string()",
+          "  id!: string;",
+          "}"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(directory, "probe.ts"),
+        [
+          `import { clearMetadataRegistry, listModelMetadata } from ${JSON.stringify(
+            pathToFileURL(resolve("packages/core/src/index.ts")).href
+          )};`,
+          "",
+          "(async () => {",
+          "  clearMetadataRegistry();",
+          '  await import("./models/todo.ts");',
+          "  console.log(JSON.stringify(listModelMetadata().map((item) => item.name)));",
+          "})().catch((error) => {",
+          "  console.error(error);",
+          "  process.exit(1);",
+          "});"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const result = spawnSync(
+        process.execPath,
+        [resolve("node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs"), join(directory, "probe.ts")],
+        {
+          cwd: directory,
+          encoding: "utf8"
+        }
+      );
+
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe('["Todo"]');
+      expect(result.stderr).toBe("");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
+
+async function createExternalCorePackageCopy(directory: string): Promise<void> {
+  const packageRoot = join(directory, "node_modules", "@ezorm", "core");
+  await mkdir(packageRoot, { recursive: true });
+  await writeFile(
+    join(packageRoot, "package.json"),
+    JSON.stringify(
+      {
+        name: "@ezorm/core",
+        type: "module",
+        exports: {
+          ".": "./src/index.ts"
+        }
+      },
+      null,
+      2
+    ) + "\n",
+    "utf8"
+  );
+  await mkdir(join(packageRoot, "src"), { recursive: true });
+  await cp(resolve("packages/core/src/index.ts"), join(packageRoot, "src", "index.ts"));
+  await cp(resolve("packages/core/src/metadata.ts"), join(packageRoot, "src", "metadata.ts"));
+  await cp(resolve("packages/core/src/types.ts"), join(packageRoot, "src", "types.ts"));
+
+  const source = await readFile(join(packageRoot, "src", "index.ts"), "utf8");
+  await writeFile(
+    join(packageRoot, "src", "index.ts"),
+    source.replaceAll("./metadata.js", "./metadata.ts").replaceAll("./types.js", "./types.ts"),
+    "utf8"
+  );
+
+  const metadataSource = await readFile(join(packageRoot, "src", "metadata.ts"), "utf8");
+  await writeFile(
+    join(packageRoot, "src", "metadata.ts"),
+    metadataSource.replaceAll("./types.js", "./types.ts"),
+    "utf8"
+  );
+}

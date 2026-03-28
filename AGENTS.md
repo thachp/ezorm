@@ -83,8 +83,8 @@ Current example workflows:
 - Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are cross-database features for the direct Node ORM. Do not claim the same for proxy-backed runtimes unless the proxy implementation has been updated too.
 - CLI and adapters should route through shared ORM client/repository helpers instead of embedding SQL logic inline.
 - The CLI migration workflow requires a single `ezorm.config.ts`, `ezorm.config.mts`, `ezorm.config.cts`, `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` file exporting `databaseUrl`, optional `models`, optional `modelPaths`, and optional `migrationsDir`.
-- `ezorm init` scaffolds the config in the nearest package root, adds an example Todo model only when no existing `@Model` source is present, and patches `tsconfig.json` to enable `experimentalDecorators` plus `emitDecoratorMetadata` for TypeScript scaffolds.
-- When `models` is omitted from the config, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives migration metadata from the discovered model modules.
+- `ezorm init` scaffolds the config in the nearest package root, defaults `modelPaths` to `src/models` when `src/` exists or `models` otherwise, adds an example Todo model only when no existing `@Model` source is present, and patches `tsconfig.json` to enable `experimentalDecorators` plus `emitDecoratorMetadata` for TypeScript scaffolds.
+- When `models` is omitted from the config, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives migration metadata from the discovered model modules. Broad scan roots such as `src`, `.`, or other wide directories may import unrelated matching files, so prefer narrow model roots or explicit `models` arrays for predictable loading.
 - Schema-producing CLI workflows (`migrate generate`, `migrate status`, and `db push`) should fail fast when loaded model metadata is incomplete, including zero-field models or models without exactly one primary key field.
 
 ## Guardrails

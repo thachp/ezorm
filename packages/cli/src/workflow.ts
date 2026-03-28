@@ -593,7 +593,7 @@ async function createInitScaffold(
   const language = await determineScaffoldLanguage(projectRoot, initOptions.language);
   const moduleStyle = language === "js" ? await detectJavaScriptModuleStyle(projectRoot) : "esm";
   const configPath = resolve(projectRoot, scaffoldConfigFilename(language, moduleStyle));
-  const modelPaths = [hasSrcDirectory ? "src" : "."];
+  const modelPaths = scaffoldModelPaths(hasSrcDirectory);
 
   let tsconfigResult: { path: string; status: "created" | "updated" } | undefined;
   if (language === "ts") {
@@ -625,7 +625,9 @@ async function discoverModelsFromConfig(configPath: string, modelPaths?: string[
 
   if (candidateFiles.length === 0) {
     throw new Error(
-      `Config ${configPath} must define a non-empty models array or discoverable model files under ${scanRoots.join(", ")}`
+      `Config ${configPath} must define a non-empty models array or discoverable model files under ${scanRoots.join(
+        ", "
+      )}. Prefer narrow modelPaths such as "src/models" or "models" instead of broad scan roots when you want predictable loading.`
     );
   }
 
@@ -636,7 +638,9 @@ async function discoverModelsFromConfig(configPath: string, modelPaths?: string[
       await import(/* @vite-ignore */ `${pathToFileURL(filePath).href}?scan=${Date.now()}-${importCounter++}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to load model source ${filePath}: ${message}`);
+      throw new Error(
+        `Failed to load model source ${filePath}: ${message}. Broad modelPaths may import unrelated matching modules; prefer narrow modelPaths such as "src/models" or "models" or define models explicitly.`
+      );
     }
   }
 
@@ -648,7 +652,7 @@ async function discoverModelsFromConfig(configPath: string, modelPaths?: string[
     throw new Error(
       `Config ${configPath} did not discover any models from ${scanRoots.join(
         ", "
-      )}. Add models to the config or create files containing @Model.`
+      )}. Add models to the config or create files containing @Model. Prefer narrow modelPaths such as "src/models" or "models" instead of broad scan roots when you want predictable loading.`
     );
   }
 
@@ -666,7 +670,19 @@ function normalizeModelPaths(modelPaths?: string[]): string[] {
 }
 
 async function defaultModelPaths(projectRoot: string): Promise<string[]> {
+  if (await directoryExists(resolve(projectRoot, "src", "models"))) {
+    return ["src/models"];
+  }
+
+  if (await directoryExists(resolve(projectRoot, "models"))) {
+    return ["models"];
+  }
+
   return (await directoryExists(resolve(projectRoot, "src"))) ? ["src"] : ["."];
+}
+
+function scaffoldModelPaths(hasSrcDirectory: boolean): string[] {
+  return [hasSrcDirectory ? "src/models" : "models"];
 }
 
 async function findModelSourceFiles(

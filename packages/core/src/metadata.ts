@@ -27,15 +27,33 @@ type PendingRelation =
   | Omit<HasManyRelationMetadata, "name">;
 
 function getRegistry(): Map<Function, ModelMetadata> {
-  const globalStore = globalThis as typeof globalThis & Record<symbol, unknown>;
-  const existing = globalStore[REGISTRY_KEY];
+  const store = getRegistryStore();
+  const existing = store[REGISTRY_KEY];
   if (existing instanceof Map) {
     return existing as Map<Function, ModelMetadata>;
   }
 
   const metadataRegistry = new Map<Function, ModelMetadata>();
-  globalStore[REGISTRY_KEY] = metadataRegistry;
+  store[REGISTRY_KEY] = metadataRegistry;
   return metadataRegistry;
+}
+
+function getRegistryStore(): Record<symbol, unknown> {
+  const processStore = getProcessStore();
+  if (processStore) {
+    return processStore;
+  }
+
+  return globalThis as typeof globalThis & Record<symbol, unknown>;
+}
+
+function getProcessStore(): Record<symbol, unknown> | undefined {
+  const globalProcess = (globalThis as typeof globalThis & { process?: unknown }).process;
+  if (typeof globalProcess === "object" && globalProcess !== null) {
+    return globalProcess as unknown as Record<symbol, unknown>;
+  }
+
+  return undefined;
 }
 
 function ensureModel(

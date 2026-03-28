@@ -51,9 +51,9 @@ Config files must export:
 - optional `modelPaths`
 - optional `migrationsDir`
 
-When `models` is omitted, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives the schema from the discovered model metadata.
+When `models` is omitted, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives the schema from the discovered model metadata. Generated configs prefer `src/models` or `models`, and broad `modelPaths` values such as `["src"]` or `["."]` may import any matching module under those roots. Prefer narrow model roots or an explicit `models` array when you need predictable, side-effect-free loading.
 
-TypeScript scaffolds write `ezorm.config.ts`, ensure `experimentalDecorators` and `emitDecoratorMetadata` are enabled in `tsconfig.json`, and create an example `Todo` model when the project does not already contain one.
+TypeScript scaffolds write `ezorm.config.ts`, ensure `experimentalDecorators` and `emitDecoratorMetadata` are enabled in `tsconfig.json`, default `modelPaths` to `["src/models"]` when `src/` exists or `["models"]` otherwise, and create an example `Todo` model when the project does not already contain one.
 
 Schema-producing commands fail fast when a loaded model resolves to incomplete metadata, such as no fields or no single-column primary key. If `migrate generate`, `migrate status`, or `db push` report invalid model metadata, check that your decorators executed, the model is loaded through a supported TypeScript or JavaScript entrypoint, and TypeScript decorator settings are enabled.
 
