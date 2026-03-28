@@ -1,0 +1,30 @@
+{
+  "name": "@sqlmodel/example-nest-todo-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/main.ts --format esm --platform node --out-dir dist --external @nestjs/common --external @nestjs/core --external reflect-metadata --external rxjs",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@sqlmodel/cqrs": "workspace:*",
+    "@sqlmodel/example-todo-domain": "workspace:*",
+    "@sqlmodel/nestjs": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.1",
+    "tsup": "^8.5.0"
+  }
+}

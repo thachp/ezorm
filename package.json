@@ -9,6 +9,10 @@
     "build:native:debug": "node packages/runtime-node/scripts/build-native.mjs",
     "build:sqlmod": "pnpm --dir packages/cli run build",
     "build:ts": "tsc -p tsconfig.json",
+    "example:build": "pnpm --filter @sqlmodel/example-todo-domain test && pnpm --filter @sqlmodel/example-nest-todo-api build && pnpm --filter @sqlmodel/example-next-todo-web build",
+    "example:nest:dev": "pnpm --filter @sqlmodel/example-nest-todo-api dev",
+    "example:next:dev": "pnpm --filter @sqlmodel/example-next-todo-web dev",
+    "example:test": "pnpm --filter @sqlmodel/example-todo-domain test && pnpm --filter @sqlmodel/example-nest-todo-api test && pnpm --filter @sqlmodel/example-next-todo-web test",
     "pack:sqlmod": "node ./scripts/pack-sqlmod.mjs",
     "release:sqlmod": "node ./scripts/release-sqlmod.mjs",
     "smoke:sqlmod": "node ./scripts/smoke-sqlmod-package.mjs",
@@ -17,9 +21,12 @@
     "test": "pnpm test:ts && cargo test"
   },
   "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "@types/node": "^24.6.0",
     "typescript": "^5.9.3",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tsx": "^4.20.6"
   }
 }

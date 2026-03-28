@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --page-bg: #f4efe6;
+  --page-ink: #1f2937;
+  --panel: rgba(255, 252, 247, 0.88);
+  --panel-border: rgba(148, 163, 184, 0.28);
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --warning: #c2410c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--page-ink);
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.25), transparent 28%),
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.18), transparent 32%),
+    linear-gradient(180deg, #fdf8ef 0%, var(--page-bg) 100%);
+}

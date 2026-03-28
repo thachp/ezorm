@@ -5,6 +5,7 @@
 - TypeScript workspace commands live at the repository root via `pnpm`.
 - Rust workspace validation lives at the repository root via `cargo`.
 - CQRS and event-sourcing primitives live in `packages/cqrs` and `packages/events`.
+- Runnable examples live under `examples/apps`, and shared example-only code lives under `examples/packages`.
 - Relational persistence support exists for the event store, snapshots, and projection checkpoints; projector replay/reset adapters should route through shared engine/runtime primitives instead of in-memory-only state.
 - The HTTP runtime proxy lives in `crates/proxy`, and edge-facing TypeScript clients should use `packages/runtime-proxy` instead of importing native bindings.
 - Keep workflow documentation aligned with the actual workspace surface before adding new commands or adapters.
@@ -22,6 +23,10 @@ Root scripts:
 
 - `pnpm build:ts`
 - `pnpm build:sqlmod`
+- `pnpm example:build`
+- `pnpm example:nest:dev`
+- `pnpm example:next:dev`
+- `pnpm example:test`
 - `pnpm typecheck`
 - `pnpm pack:sqlmod`
 - `pnpm smoke:sqlmod`
@@ -43,6 +48,12 @@ Current CLI query workflows:
 - `sqlmod migrate status`
 - `sqlmod db pull`
 
+Current example workflows:
+
+- NestJS todo backend: `examples/apps/nest-todo-api`
+- Next.js Tailwind todo frontend: `examples/apps/next-todo-web`
+- Shared todo domain demo code: `examples/packages/todo-domain`
+
 ## CQRS Rules
 
 - Every new workflow must be modeled as either a command or a query, never both.
@@ -59,6 +70,7 @@ Current CLI query workflows:
 - Keep command and query classifications one-way in docs and code. If a command starts returning read-model behavior, split that behavior into a separate query.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
 - Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.
+- The todo examples are intentionally in-memory only in v1, so docs should note that Nest restarts clear state.
 
 ## Commit Guidelines
 
