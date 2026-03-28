@@ -59,7 +59,11 @@ mod tests {
     fn plans_additive_changes_only() {
         let desired = ProjectionTable {
             name: "account_projection".into(),
-            columns: vec!["id TEXT".into(), "balance INTEGER".into(), "currency TEXT".into()],
+            columns: vec![
+                "id TEXT".into(),
+                "balance INTEGER".into(),
+                "currency TEXT".into(),
+            ],
         };
         let actual = ProjectionTable {
             name: "account_projection".into(),
@@ -67,7 +71,10 @@ mod tests {
         };
 
         let plan = plan_projection_sync(SqlDialect::Sqlite, &desired, Some(&actual));
-        assert_eq!(plan.safe_statements, vec!["ALTER TABLE account_projection ADD COLUMN currency TEXT"]);
+        assert_eq!(
+            plan.safe_statements,
+            vec!["ALTER TABLE account_projection ADD COLUMN currency TEXT"]
+        );
         assert!(plan.blocked_changes.is_empty());
     }
 
@@ -89,4 +96,3 @@ mod tests {
         );
     }
 }
-

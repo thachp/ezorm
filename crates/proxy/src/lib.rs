@@ -40,4 +40,3 @@ mod tests {
         assert!(encoded.contains("\"expected_version\":0"));
     }
 }
-

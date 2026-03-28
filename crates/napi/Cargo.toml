@@ -14,6 +14,7 @@ tokio.workspace = true
 napi = { version = "2.16", default-features = false, features = ["napi8"] }
 napi-derive = "2.16"
 sqlmodel_event_store = { path = "../event_store" }
+sqlmodel_projections = { path = "../projections" }
 
 [build-dependencies]
 napi-build = "2.1"

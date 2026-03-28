@@ -3,22 +3,45 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { InMemoryEventStore, type DomainEvent, type EventStore, type StoredEvent } from "@sqlmodel/events";
 
-export interface NodeRuntimeBinding {
-  bootstrap?(): Promise<void>;
-  load(streamId: string): Promise<StoredEvent[]>;
-  loadAll?(afterSequence?: number): Promise<StoredEvent[]>;
-  append(streamId: string, version: number, events: DomainEvent[]): Promise<StoredEvent[]>;
-  latestVersion?(streamId: string): Promise<number>;
+export interface ProjectionCheckpoint {
+  projector: string;
+  lastSequence: number;
 }
 
-export class InProcessNodeRuntime implements EventStore {
+export type ProjectorReplayHandler = (events: StoredEvent[]) => void | Promise<void>;
+type MaybePromise<T> = T | Promise<T>;
+
+export interface NodeRuntimeBinding {
+  bootstrap?(): MaybePromise<void>;
+  load(streamId: string): MaybePromise<StoredEvent[]>;
+  loadAll?(afterSequence?: number): MaybePromise<StoredEvent[]>;
+  append(streamId: string, version: number, events: DomainEvent[]): MaybePromise<StoredEvent[]>;
+  latestVersion?(streamId: string): MaybePromise<number>;
+  loadCheckpoint?(projector: string): MaybePromise<ProjectionCheckpoint | undefined>;
+  saveCheckpoint?(checkpoint: ProjectionCheckpoint): MaybePromise<void>;
+  resetCheckpoint?(projector: string): MaybePromise<void>;
+}
+
+export interface ProjectorRuntime extends EventStore {
+  loadCheckpoint(projector: string): Promise<ProjectionCheckpoint | undefined>;
+  saveCheckpoint(checkpoint: ProjectionCheckpoint): Promise<void>;
+  resetProjector(projector: string): Promise<void>;
+  replayProjector(
+    projector: string,
+    handler: ProjectorReplayHandler
+  ): Promise<ProjectionCheckpoint>;
+}
+
+export class InProcessNodeRuntime implements ProjectorRuntime {
+  private readonly inMemoryCheckpoints = new Map<string, ProjectionCheckpoint>();
+
   constructor(private readonly binding: NodeRuntimeBinding) {}
 
   async bootstrap(): Promise<void> {
     await this.binding.bootstrap?.();
   }
 
-  load(streamId: string): Promise<StoredEvent[]> {
+  async load(streamId: string): Promise<StoredEvent[]> {
     return this.binding.load(streamId);
   }
 
@@ -29,7 +52,7 @@ export class InProcessNodeRuntime implements EventStore {
     return this.binding.loadAll(afterSequence);
   }
 
-  append(streamId: string, version: number, events: DomainEvent[]): Promise<StoredEvent[]> {
+  async append(streamId: string, version: number, events: DomainEvent[]): Promise<StoredEvent[]> {
     return this.binding.append(streamId, version, events);
   }
 
@@ -39,6 +62,48 @@ export class InProcessNodeRuntime implements EventStore {
     }
     const events = await this.binding.load(streamId);
     return events.at(-1)?.version ?? 0;
+  }
+
+  async loadCheckpoint(projector: string): Promise<ProjectionCheckpoint | undefined> {
+    if (this.binding.loadCheckpoint) {
+      return this.binding.loadCheckpoint(projector);
+    }
+    return this.inMemoryCheckpoints.get(projector);
+  }
+
+  async saveCheckpoint(checkpoint: ProjectionCheckpoint): Promise<void> {
+    if (this.binding.saveCheckpoint) {
+      await this.binding.saveCheckpoint(checkpoint);
+      return;
+    }
+    this.inMemoryCheckpoints.set(checkpoint.projector, checkpoint);
+  }
+
+  async resetProjector(projector: string): Promise<void> {
+    if (this.binding.resetCheckpoint) {
+      await this.binding.resetCheckpoint(projector);
+      return;
+    }
+    this.inMemoryCheckpoints.delete(projector);
+  }
+
+  async replayProjector(
+    projector: string,
+    handler: ProjectorReplayHandler
+  ): Promise<ProjectionCheckpoint> {
+    const lastSequence = (await this.loadCheckpoint(projector))?.lastSequence ?? 0;
+    const events = await this.loadAll(lastSequence);
+    const checkpoint = {
+      projector,
+      lastSequence: events.at(-1)?.sequence ?? lastSequence
+    };
+
+    if (events.length > 0) {
+      await handler(events);
+    }
+
+    await this.saveCheckpoint(checkpoint);
+    return checkpoint;
   }
 }
 
@@ -51,10 +116,10 @@ export type NodeRuntimeBindingFactory = (
   options: NodeRuntimeConnectOptions
 ) => Promise<NodeRuntimeBinding>;
 
-export async function createNodeRuntime(
+export async function createProjectorRuntime(
   binding?: NodeRuntimeBinding,
   options?: { factory?: NodeRuntimeBindingFactory; connect?: NodeRuntimeConnectOptions }
-): Promise<EventStore> {
+): Promise<ProjectorRuntime> {
   if (binding) {
     const runtime = new InProcessNodeRuntime(binding);
     await runtime.bootstrap();
@@ -75,7 +140,16 @@ export async function createNodeRuntime(
     return runtime;
   }
 
-  return new InMemoryEventStore();
+  const runtime = new InProcessNodeRuntime(createInMemoryBinding());
+  await runtime.bootstrap();
+  return runtime;
+}
+
+export async function createNodeRuntime(
+  binding?: NodeRuntimeBinding,
+  options?: { factory?: NodeRuntimeBindingFactory; connect?: NodeRuntimeConnectOptions }
+): Promise<EventStore> {
+  return createProjectorRuntime(binding, options);
 }
 
 interface NativeEventInput {
@@ -95,16 +169,24 @@ interface NativeStoredEvent {
   metadataJson?: string;
 }
 
+interface NativeProjectionCheckpoint {
+  projector: string;
+  lastSequence: number;
+}
+
 interface NativeSqlModelRuntimeInstance {
-  bootstrap(): void | Promise<void>;
-  load(streamId: string): NativeStoredEvent[] | Promise<NativeStoredEvent[]>;
-  loadAll?(afterSequence?: number): NativeStoredEvent[] | Promise<NativeStoredEvent[]>;
+  bootstrap(): MaybePromise<void>;
+  load(streamId: string): MaybePromise<NativeStoredEvent[]>;
+  loadAll?(afterSequence?: number): MaybePromise<NativeStoredEvent[]>;
   append(
     streamId: string,
     version: number,
     events: NativeEventInput[]
-  ): NativeStoredEvent[] | Promise<NativeStoredEvent[]>;
-  latestVersion?(streamId: string): number | Promise<number>;
+  ): MaybePromise<NativeStoredEvent[]>;
+  latestVersion?(streamId: string): MaybePromise<number>;
+  loadCheckpoint?(projector: string): MaybePromise<NativeProjectionCheckpoint | undefined>;
+  saveCheckpoint?(checkpoint: NativeProjectionCheckpoint): MaybePromise<void>;
+  resetCheckpoint?(projector: string): MaybePromise<void>;
 }
 
 interface NativeModule {
@@ -150,6 +232,25 @@ export function createNativeBindingFactory(loader: NativeModuleLoader = loadNati
         }
         const events = await runtime.load(streamId);
         return events.at(-1)?.version ?? 0;
+      },
+      loadCheckpoint: async (projector) =>
+        runtime.loadCheckpoint
+          ? mapProjectionCheckpoint(await runtime.loadCheckpoint(projector))
+          : undefined,
+      saveCheckpoint: async (checkpoint) => {
+        if (!runtime.saveCheckpoint) {
+          throw new Error("Native runtime does not implement saveCheckpoint");
+        }
+        await runtime.saveCheckpoint({
+          projector: checkpoint.projector,
+          lastSequence: checkpoint.lastSequence
+        });
+      },
+      resetCheckpoint: async (projector) => {
+        if (!runtime.resetCheckpoint) {
+          throw new Error("Native runtime does not implement resetCheckpoint");
+        }
+        await runtime.resetCheckpoint(projector);
       }
     };
   };
@@ -233,4 +334,27 @@ function mapStoredEvents(events: NativeStoredEvent[]): StoredEvent[] {
       : undefined,
     recordedAt: new Date(0).toISOString()
   }));
+}
+
+function mapProjectionCheckpoint(
+  checkpoint: NativeProjectionCheckpoint | undefined
+): ProjectionCheckpoint | undefined {
+  if (!checkpoint) {
+    return undefined;
+  }
+  return {
+    projector: checkpoint.projector,
+    lastSequence: checkpoint.lastSequence
+  };
+}
+
+function createInMemoryBinding(): NodeRuntimeBinding {
+  const store = new InMemoryEventStore();
+
+  return {
+    load: async (streamId) => store.load(streamId),
+    loadAll: async (afterSequence = 0) => store.loadAll(afterSequence),
+    append: async (streamId, version, events) => store.append(streamId, version, events),
+    latestVersion: async (streamId) => store.latestVersion(streamId)
+  };
 }

@@ -3,6 +3,7 @@ use napi::Error;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use sqlmodel_event_store::{EventRecord, NewEvent, SqlEventStore};
+use sqlmodel_projections::{CheckpointStore, ProjectionCheckpoint, SqlCheckpointStore};
 use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -42,10 +43,17 @@ pub struct NativeStoredEvent {
     pub metadata_json: Option<String>,
 }
 
+#[napi(object)]
+pub struct NativeProjectionCheckpoint {
+    pub projector: String,
+    pub last_sequence: u32,
+}
+
 #[napi]
 pub struct NativeSqlModelRuntime {
     runtime: Runtime,
     store: SqlEventStore,
+    checkpoints: SqlCheckpointStore,
 }
 
 #[napi]
@@ -54,6 +62,21 @@ impl NativeSqlModelRuntime {
     pub fn bootstrap(&self) -> NapiResult<()> {
         self.runtime
             .block_on(self.store.bootstrap())
+            .map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.checkpoints.bootstrap())
+            .map_err(to_napi_error)?;
+        Ok(())
+    }
+
+    #[napi(js_name = "loadCheckpoint")]
+    pub fn load_checkpoint(
+        &self,
+        projector: String,
+    ) -> NapiResult<Option<NativeProjectionCheckpoint>> {
+        self.runtime
+            .block_on(self.checkpoints.load(&projector))
+            .map(|checkpoint| checkpoint.map(Into::into))
             .map_err(to_napi_error)
     }
 
@@ -68,7 +91,10 @@ impl NativeSqlModelRuntime {
     #[napi(js_name = "loadAll")]
     pub fn load_all(&self, after_sequence: Option<u32>) -> NapiResult<Vec<NativeStoredEvent>> {
         self.runtime
-            .block_on(self.store.load_all_after(after_sequence.unwrap_or(0) as u64))
+            .block_on(
+                self.store
+                    .load_all_after(after_sequence.unwrap_or(0) as u64),
+            )
             .map(|events| events.into_iter().map(NativeStoredEvent::from).collect())
             .map_err(to_napi_error)
     }
@@ -99,6 +125,23 @@ impl NativeSqlModelRuntime {
             .map(|version| version as u32)
             .map_err(to_napi_error)
     }
+
+    #[napi(js_name = "saveCheckpoint")]
+    pub fn save_checkpoint(&self, checkpoint: NativeProjectionCheckpoint) -> NapiResult<()> {
+        self.runtime
+            .block_on(
+                self.checkpoints
+                    .save(&ProjectionCheckpoint::from(checkpoint)),
+            )
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "resetCheckpoint")]
+    pub fn reset_checkpoint(&self, projector: String) -> NapiResult<()> {
+        self.runtime
+            .block_on(self.checkpoints.reset(&projector))
+            .map_err(to_napi_error)
+    }
 }
 
 #[napi]
@@ -107,8 +150,15 @@ pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeSqlModel
     let store = runtime
         .block_on(SqlEventStore::connect(&database_url))
         .map_err(to_napi_error)?;
+    let checkpoints = runtime
+        .block_on(SqlCheckpointStore::connect(&database_url))
+        .map_err(to_napi_error)?;
 
-    Ok(NativeSqlModelRuntime { runtime, store })
+    Ok(NativeSqlModelRuntime {
+        runtime,
+        store,
+        checkpoints,
+    })
 }
 
 impl TryFrom<NativeEventInput> for NewEvent {
@@ -144,6 +194,24 @@ impl From<EventRecord> for NativeStoredEvent {
     }
 }
 
+impl From<ProjectionCheckpoint> for NativeProjectionCheckpoint {
+    fn from(value: ProjectionCheckpoint) -> Self {
+        Self {
+            projector: value.projector,
+            last_sequence: value.last_sequence as u32,
+        }
+    }
+}
+
+impl From<NativeProjectionCheckpoint> for ProjectionCheckpoint {
+    fn from(value: NativeProjectionCheckpoint) -> Self {
+        Self {
+            projector: value.projector,
+            last_sequence: value.last_sequence as u64,
+        }
+    }
+}
+
 fn to_napi_error(error: impl std::fmt::Display) -> Error {
     Error::from_reason(error.to_string())
 }
@@ -172,5 +240,20 @@ mod tests {
         assert_eq!(event.schema_version, 1);
         assert_eq!(event.payload["owner"], "alice");
         assert_eq!(event.metadata.unwrap()["source"], "test");
+    }
+
+    #[test]
+    fn converts_projection_checkpoints() {
+        let checkpoint = ProjectionCheckpoint::from(NativeProjectionCheckpoint {
+            projector: "balances".into(),
+            last_sequence: 7,
+        });
+
+        assert_eq!(checkpoint.projector, "balances");
+        assert_eq!(checkpoint.last_sequence, 7);
+        assert_eq!(
+            NativeProjectionCheckpoint::from(checkpoint).last_sequence,
+            7
+        );
     }
 }

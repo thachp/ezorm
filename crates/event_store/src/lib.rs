@@ -221,9 +221,15 @@ impl SqlEventStore {
         events: Vec<NewEvent>,
     ) -> Result<Vec<EventRecord>, EventStoreError> {
         match &self.pool {
-            RelationalPool::Sqlite(pool) => append_with_sqlite(pool, stream_id, expected_version, &events).await?,
-            RelationalPool::Postgres(pool) => append_with_postgres(pool, stream_id, expected_version, &events).await?,
-            RelationalPool::Mysql(pool) => append_with_mysql(pool, stream_id, expected_version, &events).await?,
+            RelationalPool::Sqlite(pool) => {
+                append_with_sqlite(pool, stream_id, expected_version, &events).await?
+            }
+            RelationalPool::Postgres(pool) => {
+                append_with_postgres(pool, stream_id, expected_version, &events).await?
+            }
+            RelationalPool::Mysql(pool) => {
+                append_with_mysql(pool, stream_id, expected_version, &events).await?
+            }
         }
         self.load_stream(stream_id).await
     }
@@ -453,7 +459,9 @@ fn row_to_event_sqlite(row: SqliteRow) -> Result<EventRecord, EventStoreError> {
         event_type: row.try_get("event_type")?,
         payload: serde_json::from_str(&payload)?,
         schema_version: row.try_get::<i64, _>("schema_version")? as u32,
-        metadata: metadata.map(|item| serde_json::from_str(&item)).transpose()?,
+        metadata: metadata
+            .map(|item| serde_json::from_str(&item))
+            .transpose()?,
     })
 }
 
@@ -467,7 +475,9 @@ fn row_to_event_postgres(row: PgRow) -> Result<EventRecord, EventStoreError> {
         event_type: row.try_get("event_type")?,
         payload: serde_json::from_str(&payload)?,
         schema_version: row.try_get::<i32, _>("schema_version")? as u32,
-        metadata: metadata.map(|item| serde_json::from_str(&item)).transpose()?,
+        metadata: metadata
+            .map(|item| serde_json::from_str(&item))
+            .transpose()?,
     })
 }
 
@@ -481,11 +491,15 @@ fn row_to_event_mysql(row: MySqlRow) -> Result<EventRecord, EventStoreError> {
         event_type: row.try_get("event_type")?,
         payload: serde_json::from_str(&payload)?,
         schema_version: row.try_get::<i32, _>("schema_version")? as u32,
-        metadata: metadata.map(|item| serde_json::from_str(&item)).transpose()?,
+        metadata: metadata
+            .map(|item| serde_json::from_str(&item))
+            .transpose()?,
     })
 }
 
-fn optional_json_string(value: Option<&serde_json::Value>) -> Result<Option<String>, EventStoreError> {
+fn optional_json_string(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<String>, EventStoreError> {
     value
         .map(serde_json::to_string)
         .transpose()
@@ -500,7 +514,9 @@ fn dialect_from_url(database_url: &str) -> Result<SqlDialect, EventStoreError> {
     } else if database_url.starts_with("mysql://") {
         Ok(SqlDialect::Mysql)
     } else {
-        Err(EventStoreError::UnsupportedDatabaseUrl(database_url.to_owned()))
+        Err(EventStoreError::UnsupportedDatabaseUrl(
+            database_url.to_owned(),
+        ))
     }
 }
 
@@ -541,17 +557,18 @@ mod tests {
     #[test]
     fn rejects_stale_expected_versions() {
         let store = InMemoryEventStore::new();
-        store.append(
-            "account-1",
-            0,
-            vec![NewEvent {
-                event_type: "account.opened".into(),
-                payload: json!({}),
-                schema_version: 1,
-                metadata: None,
-            }],
-        )
-        .unwrap();
+        store
+            .append(
+                "account-1",
+                0,
+                vec![NewEvent {
+                    event_type: "account.opened".into(),
+                    payload: json!({}),
+                    schema_version: 1,
+                    metadata: None,
+                }],
+            )
+            .unwrap();
 
         let error = store
             .append(

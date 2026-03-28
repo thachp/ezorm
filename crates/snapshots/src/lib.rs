@@ -148,7 +148,10 @@ impl SqlSnapshotStore {
             }
             SnapshotPool::Mysql(pool) => {
                 let current = self.load(&snapshot.stream_id).await?;
-                if current.as_ref().map_or(true, |record| snapshot.version >= record.version) {
+                if current
+                    .as_ref()
+                    .map_or(true, |record| snapshot.version >= record.version)
+                {
                     sqlx::query(
                         "INSERT INTO snapshots (stream_id, version, schema_version, state) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE version = VALUES(version), schema_version = VALUES(schema_version), state = VALUES(state)",
                     )
@@ -165,7 +168,10 @@ impl SqlSnapshotStore {
         Ok(())
     }
 
-    pub async fn load(&self, stream_id: &str) -> Result<Option<SnapshotRecord>, SnapshotStoreError> {
+    pub async fn load(
+        &self,
+        stream_id: &str,
+    ) -> Result<Option<SnapshotRecord>, SnapshotStoreError> {
         match &self.pool {
             SnapshotPool::Sqlite(pool) => {
                 let row = sqlx::query(

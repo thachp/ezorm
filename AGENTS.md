@@ -5,6 +5,7 @@
 - TypeScript workspace commands live at the repository root via `pnpm`.
 - Rust workspace validation lives at the repository root via `cargo`.
 - CQRS and event-sourcing primitives live in `packages/cqrs` and `packages/events`.
+- Relational persistence support exists for the event store, snapshots, and projection checkpoints; projector replay/reset adapters should route through shared engine/runtime primitives instead of in-memory-only state.
 - Keep workflow documentation aligned with the actual workspace surface before adding new commands or adapters.
 
 ## Preferred Workflow

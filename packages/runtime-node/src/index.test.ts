@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createNativeBindingFactory, createNodeRuntime, detectNativeTargetTriple } from "./index";
+import {
+  createNativeBindingFactory,
+  createNodeRuntime,
+  createProjectorRuntime,
+  detectNativeTargetTriple
+} from "./index";
 
 describe("@sqlmodel/runtime-node", () => {
   it("uses a binding factory when a database url is supplied", async () => {
@@ -13,7 +18,10 @@ describe("@sqlmodel/runtime-node", () => {
           load: async () => [],
           loadAll: async () => [],
           append: async () => [],
-          latestVersion: async () => 0
+          latestVersion: async () => 0,
+          loadCheckpoint: async () => undefined,
+          saveCheckpoint: async () => undefined,
+          resetCheckpoint: async () => undefined
         };
       }
     });
@@ -49,7 +57,12 @@ describe("@sqlmodel/runtime-node", () => {
           },
           latestVersion() {
             return 1;
-          }
+          },
+          loadCheckpoint() {
+            return { projector: "balances", lastSequence: 1 };
+          },
+          saveCheckpoint() {},
+          resetCheckpoint() {}
         };
       }
     }));
@@ -62,6 +75,76 @@ describe("@sqlmodel/runtime-node", () => {
       payload: { owner: "alice" },
       metadata: { source: "native" }
     });
+    await expect(binding.loadCheckpoint?.("balances")).resolves.toEqual({
+      projector: "balances",
+      lastSequence: 1
+    });
+  });
+
+  it("replays projectors from persisted checkpoints and supports reset", async () => {
+    const checkpoints = new Map<string, number>();
+    const runtime = await createProjectorRuntime({
+      load: async () => [],
+      loadAll: async (afterSequence = 0) =>
+        [
+          {
+            streamId: "account-1",
+            version: 1,
+            sequence: 1,
+            type: "account.opened",
+            payload: { owner: "alice" },
+            schemaVersion: 1,
+            recordedAt: new Date(0).toISOString()
+          },
+          {
+            streamId: "account-1",
+            version: 2,
+            sequence: 2,
+            type: "account.deposited",
+            payload: { amount: 10 },
+            schemaVersion: 1,
+            recordedAt: new Date(0).toISOString()
+          }
+        ].filter((event) => event.sequence > afterSequence),
+      append: async () => [],
+      latestVersion: async () => 2,
+      loadCheckpoint: async (projector) => {
+        const lastSequence = checkpoints.get(projector);
+        return lastSequence === undefined ? undefined : { projector, lastSequence };
+      },
+      saveCheckpoint: async (checkpoint) => {
+        checkpoints.set(checkpoint.projector, checkpoint.lastSequence);
+      },
+      resetCheckpoint: async (projector) => {
+        checkpoints.delete(projector);
+      }
+    });
+
+    const handler = vi.fn();
+    const firstReplay = await runtime.replayProjector("balances", handler);
+    const secondReplay = await runtime.replayProjector("balances", handler);
+    await runtime.resetProjector("balances");
+    const thirdReplay = await runtime.replayProjector("balances", handler);
+
+    expect(firstReplay.lastSequence).toBe(2);
+    expect(secondReplay.lastSequence).toBe(2);
+    expect(thirdReplay.lastSequence).toBe(2);
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("defaults to an in-memory projector runtime when no binding is supplied", async () => {
+    const runtime = await createProjectorRuntime();
+
+    await runtime.append("account-1", 0, [
+      {
+        type: "account.opened",
+        payload: { owner: "alice" }
+      }
+    ]);
+
+    const checkpoint = await runtime.replayProjector("balances", async () => undefined);
+    expect(checkpoint.lastSequence).toBe(1);
+    await expect(runtime.loadCheckpoint("balances")).resolves.toEqual(checkpoint);
   });
 
   it("maps supported platforms to packaged target triples", () => {
