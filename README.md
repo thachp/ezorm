@@ -5,7 +5,7 @@
 > Current status
 >
 > - `@ezorm/core` + `@ezorm/orm` are the primary application path.
-> - The `ezorm` CLI surface is implemented, but most commands still print queued/demo output.
+> - The `ezorm` CLI executes migration and schema workflows from an explicit `ezorm.config.*` file.
 > - The Nest and Next todo examples are the best end-to-end references today.
 > - The example ORM flow defaults to SQLite in-memory, so restarting the example processes clears data.
 
@@ -21,7 +21,7 @@ Ezorm is intentionally split into a small TypeScript ORM surface and an optional
 | Database support today | Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL; `@ezorm/runtime-proxy` supports pooled CRUD and schema sync for SQLite, PostgreSQL, MySQL, and MSSQL | Multi-database support is part of the main client/runtime story | Varies by adapter and dialect |
 | Connection pooling today | `@ezorm/runtime-proxy` uses pooled Rust database connections; direct `@ezorm/orm` and `@ezorm/runtime-node` use direct driver connections in the app runtime | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
 | Runtime / deployment shape | Can run directly in local Node SQLite flows or move relational work behind Rust-backed runtime and proxy helpers | Usually presented as one generated client talking to the database from server runtimes | Usually optimized for direct database access from the app runtime |
-| Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI currently exposes the intended workflow surface while most commands still print queued/demo output | Migration and introspection workflows are core product features | Varies widely across tools |
+| Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI adds checked-in SQL migrations, status, resolve, and direct `db push` / `db pull` workflows from an explicit config file | Migration and introspection workflows are core product features | Varies widely across tools |
 | Current scope | Focused on decorated models, repository CRUD, explicit read queries, query-scoped lazy relations, projection selects, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
 
 Current limits are important:
@@ -30,7 +30,7 @@ Current limits are important:
 - Cross-database pooled ORM CRUD and schema sync are available through `@ezorm/runtime-proxy` and the managed proxy runtime for SQLite, PostgreSQL, MySQL, and MSSQL.
 - Query support is intentionally focused on repository CRUD plus explicit read queries, query-scoped lazy relations, projection selects, and relation loading.
 - Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the proxy-backed runtime yet.
-- The CLI command surface is implemented, but most commands still print queued/demo output.
+- The CLI expects a project-level `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` that exports `databaseUrl`, `models`, and an optional `migrationsDir`.
 
 If you want the current ezorm product path, start with the `@ezorm/core` and `@ezorm/orm` model and repository flow shown below, then add runtimes and adapters as needed.
 
@@ -70,11 +70,25 @@ Usage:
   ezorm migrate generate [name]
   ezorm migrate apply
   ezorm migrate status
+  ezorm migrate resolve --applied <filename>
+  ezorm migrate resolve --rolled-back <filename>
   ezorm db pull
   ezorm db push
 ```
 
-Today, these commands are best treated as workflow discovery. They parse the supported ORM-first command surface and mostly print queued/demo output rather than executing a fully wired migration or introspection workflow.
+Example config:
+
+```js
+import { TodoModel } from "./models.js";
+
+export default {
+  databaseUrl: "sqlite:///tmp/ezorm.db",
+  models: [TodoModel],
+  migrationsDir: "migrations"
+};
+```
+
+`migrate generate` writes additive SQL files, `migrate apply` executes pending files and records them in `_ezorm_migrations`, `migrate resolve` reconciles migration history only, `db pull` prints the live schema as JSON, and `db push` applies additive schema drift directly without updating migration history.
 
 ## Maintainer Release Workflow
 
@@ -310,18 +324,20 @@ The current public CLI surface is defined in [`packages/cli/src/index.ts`](/User
 ezorm migrate generate [name]
 ezorm migrate apply
 ezorm migrate status
+ezorm migrate resolve --applied <filename>
+ezorm migrate resolve --rolled-back <filename>
 ezorm db pull
 ezorm db push
 ```
 
-Current demo behavior:
+Example CLI workflow:
 
 ```sh
+npx ezorm migrate generate init
+npx ezorm migrate apply
 npx ezorm migrate status
-# Queued migrate status
-
+npx ezorm db pull
 npx ezorm db push
-# Queued db push
 ```
 
 Inside this workspace, you can build and run the local CLI with:

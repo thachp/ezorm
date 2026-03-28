@@ -91,7 +91,8 @@ describe("@ezorm/orm", () => {
         columns: [
           { name: "id", type: "TEXT", notNull: true, primaryKey: true },
           { name: "balance", type: "REAL", notNull: true, primaryKey: false }
-        ]
+        ],
+        indices: []
       }
     ]);
   });
@@ -377,6 +378,13 @@ describe("@ezorm/orm", () => {
           columns: [
             { name: "post_id", type: "TEXT", notNull: true, primaryKey: false },
             { name: "tag_id", type: "TEXT", notNull: true, primaryKey: false }
+          ],
+          indices: [
+            {
+              name: "post_tags_post_id_tag_id_unique",
+              columns: ["post_id", "tag_id"],
+              unique: true
+            }
           ]
         }
       ])

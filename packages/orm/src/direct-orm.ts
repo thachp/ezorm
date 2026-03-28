@@ -8,6 +8,10 @@ import {
   type ModelMetadata
 } from "@ezorm/core";
 import {
+  createSchemaStatementsForModels,
+  type TableSchema
+} from "./schema";
+import {
   connectRelationalAdapter,
   type RelationalAdapter,
   type SqlDialect
@@ -80,16 +84,6 @@ export interface OrmClient {
   pushSchema(models: Function[]): Promise<{ statements: string[] }>;
   pullSchema(): Promise<TableSchema[]>;
   close(): Promise<void>;
-}
-
-export interface TableSchema {
-  name: string;
-  columns: Array<{
-    name: string;
-    type: string;
-    notNull: boolean;
-    primaryKey: boolean;
-  }>;
 }
 
 export interface ModelClass<T extends object> {
@@ -181,7 +175,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
       return;
     }
 
-    for (const statement of createSchemaStatements(adapter.dialect, metadata)) {
+    for (const statement of createSchemaStatementsForModels(adapter.dialect, [metadata])) {
       await executeSchemaStatement(adapter, statement);
     }
     ensuredTables.add(metadata.table);
@@ -427,9 +421,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
     loadMany,
 
     async pushSchema(models) {
-      const statements = uniqueStatements(
-        models.flatMap((model) => createSchemaStatements(adapter.dialect, getModelMetadata(model)))
-      );
+      const statements = createSchemaStatementsForModels(adapter.dialect, models);
 
       for (const model of models) {
         await ensureTable(model);
@@ -803,46 +795,6 @@ function relationDefaults(kind: RelationPlan["kind"]): unknown {
   return kind === "belongsTo" ? undefined : [];
 }
 
-function createSchemaStatements(dialect: SqlDialect, metadata: ModelMetadata): string[] {
-  return uniqueStatements([
-    createTableStatement(dialect, metadata),
-    ...createIndexStatements(dialect, metadata),
-    ...createManyToManyStatements(dialect, metadata)
-  ]);
-}
-
-function createManyToManyStatements(dialect: SqlDialect, metadata: ModelMetadata): string[] {
-  return metadata.relations.flatMap((relation) => {
-    if (relation.kind !== "manyToMany") {
-      return [];
-    }
-
-    const targetMetadata = getModelMetadata(relation.target());
-    const sourceField = fieldMetadata(metadata, relation.sourceKey);
-    const targetField = fieldMetadata(targetMetadata, relation.targetKey);
-    const createTableSql = `CREATE TABLE ${quoteIdentifier(dialect, relation.throughTable)} (${quoteIdentifier(
-      dialect,
-      relation.throughSourceKey
-    )} ${sqlTypeForField(dialect, sourceField)} NOT NULL, ${quoteIdentifier(
-      dialect,
-      relation.throughTargetKey
-    )} ${sqlTypeForField(dialect, targetField)} NOT NULL)`;
-    const uniqueIndexName = `${relation.throughTable}_${relation.throughSourceKey}_${relation.throughTargetKey}_unique`;
-    const createIndexSql = `CREATE UNIQUE INDEX ${quoteIdentifier(
-      dialect,
-      uniqueIndexName
-    )} ON ${quoteIdentifier(dialect, relation.throughTable)} (${quoteIdentifier(
-      dialect,
-      relation.throughSourceKey
-    )}, ${quoteIdentifier(dialect, relation.throughTargetKey)})`;
-
-    return [
-      schemaStatementWithExistenceGuard(dialect, "table", relation.throughTable, createTableSql),
-      schemaStatementWithExistenceGuard(dialect, "index", uniqueIndexName, createIndexSql, relation.throughTable)
-    ];
-  });
-}
-
 function executeSchemaStatement(adapter: RelationalAdapter, statement: string): Promise<void> {
   return adapter.execute(statement).catch((error: unknown) => {
     if (isIgnorableSchemaError(adapter.dialect, error)) {
@@ -874,35 +826,6 @@ function isIgnorableSchemaError(dialect: SqlDialect, error: unknown): boolean {
   }
 
   return false;
-}
-
-function schemaStatementWithExistenceGuard(
-  dialect: SqlDialect,
-  kind: "table" | "index",
-  name: string,
-  statement: string,
-  tableName?: string
-): string {
-  if (dialect === "mssql") {
-    if (kind === "table") {
-      return `IF OBJECT_ID(N'${escapeSqlString(name)}', N'U') IS NULL EXEC(N'${escapeSqlString(statement)}')`;
-    }
-    return `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'${escapeSqlString(
-      name
-    )}' AND object_id = OBJECT_ID(N'${escapeSqlString(tableName ?? "")}')) EXEC(N'${escapeSqlString(
-      statement
-    )}')`;
-  }
-
-  if (dialect === "mysql" && kind === "index") {
-    return statement;
-  }
-
-  const marker = kind === "table" ? "CREATE TABLE " : "CREATE INDEX ";
-  if (statement.startsWith("CREATE UNIQUE INDEX ")) {
-    return statement.replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX IF NOT EXISTS ");
-  }
-  return statement.replace(marker, `${marker}IF NOT EXISTS `);
 }
 
 function uniqueStatements(statements: string[]): string[] {
@@ -937,35 +860,6 @@ function assignRelation(entity: object, relationName: string, value: unknown): v
   state.relationCache.set(relationName, {
     promise: existing?.promise ?? Promise.resolve(value),
     value
-  });
-}
-
-function createTableStatement(dialect: SqlDialect, metadata: ModelMetadata): string {
-  const columns = metadata.fields.map((field) => {
-    const parts = [
-      quoteIdentifier(dialect, field.name),
-      sqlTypeForField(dialect, field),
-      field.primaryKey ? "PRIMARY KEY" : "",
-      !field.nullable && field.defaultValue === undefined ? "NOT NULL" : "",
-      field.defaultValue !== undefined ? `DEFAULT ${defaultValueSql(dialect, field)}` : ""
-    ].filter(Boolean);
-    return parts.join(" ");
-  });
-
-  const createTableSql = `CREATE TABLE ${quoteIdentifier(dialect, metadata.table)} (${columns.join(", ")})`;
-  return schemaStatementWithExistenceGuard(dialect, "table", metadata.table, createTableSql);
-}
-
-function createIndexStatements(dialect: SqlDialect, metadata: ModelMetadata): string[] {
-  return metadata.indices.map((index, indexPosition) => {
-    const name = index.name ?? `${metadata.table}_${index.fields.join("_")}_${indexPosition}`;
-    const createIndexSql = `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(
-      dialect,
-      name
-    )} ON ${quoteIdentifier(dialect, metadata.table)} (${index.fields
-      .map((field) => quoteIdentifier(dialect, field))
-      .join(", ")})`;
-    return schemaStatementWithExistenceGuard(dialect, "index", name, createIndexSql, metadata.table);
   });
 }
 
@@ -1140,61 +1034,6 @@ function fromDatabaseValue(
   return value;
 }
 
-function sqlTypeForField(dialect: SqlDialect, field: FieldMetadata): string {
-  switch (field.type) {
-    case "string":
-      return dialect === "mysql" ? "VARCHAR(255)" : dialect === "mssql" ? "NVARCHAR(255)" : "TEXT";
-    case "number":
-      if (dialect === "postgres") {
-        return "DOUBLE PRECISION";
-      }
-      if (dialect === "mysql") {
-        return "DOUBLE";
-      }
-      if (dialect === "mssql") {
-        return "FLOAT";
-      }
-      return "REAL";
-    case "boolean":
-      if (dialect === "postgres" || dialect === "mysql") {
-        return "BOOLEAN";
-      }
-      if (dialect === "mssql") {
-        return "BIT";
-      }
-      return "INTEGER";
-    case "json":
-      if (dialect === "mysql") {
-        return "LONGTEXT";
-      }
-      if (dialect === "mssql") {
-        return "NVARCHAR(MAX)";
-      }
-      return "TEXT";
-    default:
-      return "TEXT";
-  }
-}
-
-function defaultValueSql(dialect: SqlDialect, field: FieldMetadata): string {
-  if (field.type === "boolean") {
-    return dialect === "postgres"
-      ? field.defaultValue
-        ? "TRUE"
-        : "FALSE"
-      : field.defaultValue
-        ? "1"
-        : "0";
-  }
-  if (field.type === "number") {
-    return String(field.defaultValue);
-  }
-  if (field.type === "json") {
-    return quoteSqlString(JSON.stringify(field.defaultValue));
-  }
-  return quoteSqlString(String(field.defaultValue));
-}
-
 function quoteIdentifier(dialect: SqlDialect, value: string): string {
   if (dialect === "mysql") {
     return `\`${value.replaceAll("`", "``")}\``;
@@ -1203,14 +1042,6 @@ function quoteIdentifier(dialect: SqlDialect, value: string): string {
     return `[${value.replaceAll("]", "]]")}]`;
   }
   return `"${value.replaceAll('"', '""')}"`;
-}
-
-function quoteSqlString(value: string): string {
-  return `'${escapeSqlString(value)}'`;
-}
-
-function escapeSqlString(value: string): string {
-  return value.replaceAll("'", "''");
 }
 
 function placeholder(dialect: SqlDialect, index: number): string {

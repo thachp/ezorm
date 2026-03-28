@@ -2,10 +2,6 @@
 
 `ezorm` is the published CLI package for Ezorm workflows.
 
-## Current Status
-
-The current command surface is implemented and stable enough to inspect with `--help`, but most commands still print queued/demo output rather than executing a fully wired workflow.
-
 ## Run Without Installing
 
 ```sh
@@ -24,18 +20,37 @@ npm install ezorm
 ezorm migrate generate [name]
 ezorm migrate apply
 ezorm migrate status
+ezorm migrate resolve --applied <filename>
+ezorm migrate resolve --rolled-back <filename>
 ezorm db pull
 ezorm db push
 ```
 
-## Example Output
+## Config
 
 ```sh
-npx ezorm migrate status
-# Queued migrate status
+cat > ezorm.config.mjs <<'EOF'
+import { TodoModel } from "./models.js";
 
-npx ezorm db push
-# Queued db push
+export default {
+  databaseUrl: "sqlite:///tmp/ezorm.db",
+  models: [TodoModel]
+};
+EOF
 ```
+
+`migrations/` is the default migration directory. Set `migrationsDir` in the config to override it.
+
+## Example Workflow
+
+```sh
+npx ezorm migrate generate init
+npx ezorm migrate apply
+npx ezorm migrate status
+npx ezorm db pull
+npx ezorm db push
+```
+
+`db push` is the direct additive schema-sync shortcut for development. `migrate resolve` only reconciles migration history; it does not execute SQL.
 
 For the TypeScript APIs behind Ezorm applications, see the repository root README and the `@ezorm/*` packages.
