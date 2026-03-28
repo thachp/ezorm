@@ -22,13 +22,13 @@ Ezorm is intentionally split into a small TypeScript ORM surface and a Rust-back
 | Connection pooling today | Rust relational components use pooled SQLx connections; the main TypeScript ORM path is not yet a pooled cross-database abstraction | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
 | Runtime / deployment shape | Can run directly in local Node SQLite flows or move relational work behind Rust-backed runtime and proxy helpers | Usually presented as one generated client talking to the database from server runtimes | Usually optimized for direct database access from the app runtime |
 | Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI currently exposes the intended workflow surface while most commands still print queued/demo output | Migration and introspection workflows are core product features | Varies widely across tools |
-| Current scope | Focused on decorated models, repository CRUD, explicit read queries, relation loading, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
+| Current scope | Focused on decorated models, repository CRUD, explicit read queries, query-scoped lazy relations, projection selects, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
 
 Current limits are important:
 
 - The main `@ezorm/orm` package is still SQLite-only today.
 - Rust relational pooling currently applies to the SQLx-backed event-store, snapshot, and projection components, not to the full TypeScript ORM API.
-- Query support is intentionally focused on repository CRUD plus explicit read queries and relation loading.
+- Query support is intentionally focused on repository CRUD plus explicit read queries, query-scoped lazy relations, projection selects, and relation loading.
 - The CLI command surface is implemented, but most commands still print queued/demo output.
 
 If you want the current ezorm product path, start with the `@ezorm/core` and `@ezorm/orm` model and repository flow shown below, then add runtimes and adapters as needed.
@@ -217,7 +217,19 @@ const posts = await client
   .all();
 
 const users = await client.query(User).include("posts").all();
+await posts[0].author;
+await users[0].posts;
 await client.load(Post, posts[0], "author");
+
+const projected = await client
+  .query(Post)
+  .join("author")
+  .select<{ title: string; authorEmail: string }>({
+    title: "title",
+    authorEmail: "author.email"
+  })
+  .orderBy("title", "asc")
+  .all();
 ```
 
 Current relation support is intentionally narrow:
@@ -225,8 +237,11 @@ Current relation support is intentionally narrow:
 - `BelongsTo`, `HasMany`, and `ManyToMany`
 - explicit key mappings are required
 - `client.query(Model)` is read-only
-- `include(...)`, `load(...)`, and `loadMany(...)` are explicit async APIs
-- no implicit property lazy loading and no custom `select()` builder yet
+- query results are model instances with non-enumerable lazy relation properties
+- relation properties are promise-valued, for example `await post.author` and `await user.posts`
+- `include(...)` prewarms lazy relation caches on query entities without changing the enumerable row shape
+- `load(...)` and `loadMany(...)` remain the explicit plain-object relation APIs
+- `select(...)` switches the query into flat projection mode and returns plain rows
 
 Many-to-many relations use an explicit join table and remain read-oriented in v1:
 
@@ -271,7 +286,7 @@ const postsWithOrmTag = await client
   .include("tags")
   .all();
 
-await client.load(Post, postsWithOrmTag[0], "tags");
+await postsWithOrmTag[0].tags;
 ```
 
 ## CLI Workflows Available Today

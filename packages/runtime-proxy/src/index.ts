@@ -3,6 +3,7 @@ import type {
   FindManyOptions,
   ModelClass,
   OrmClient,
+  ProjectionQueryBuilder,
   QueryBuilder,
   Repository,
   TableSchema
@@ -169,6 +170,12 @@ class UnsupportedProxyQueryBuilder<T extends object> implements QueryBuilder<T> 
 
   include(): QueryBuilder<T> {
     return this;
+  }
+
+  select<Row extends object>(
+    _shape: Record<Extract<keyof Row, string>, string>
+  ): ProjectionQueryBuilder<Row> {
+    return this as unknown as ProjectionQueryBuilder<Row>;
   }
 
   async all(): Promise<T[]> {

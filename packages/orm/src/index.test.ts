@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { BelongsTo, Field, HasMany, ManyToMany, Model, PrimaryKey } from "@ezorm/core";
-import { createOrmClient } from "./index";
+import { createOrmClient, type QueryBuilder } from "./index";
 
 let tempDirectory: string | undefined;
 
@@ -96,7 +96,7 @@ describe("@ezorm/orm", () => {
     ]);
   });
 
-  it("joins belongs-to relations for filtering and ordering", async () => {
+  it("returns query entities as model instances for joined reads", async () => {
     const { Post, User } = defineAuthorModels();
     client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
     await seedAuthorModels(client, User, Post);
@@ -109,6 +109,7 @@ describe("@ezorm/orm", () => {
       .orderBy("title", "asc")
       .all();
 
+    expect(posts[0]).toBeInstanceOf(Post);
     expect(posts).toEqual([
       {
         id: "post-1",
@@ -123,82 +124,114 @@ describe("@ezorm/orm", () => {
     ]);
   });
 
-  it("hydrates belongs-to includes without changing the base row shape", async () => {
+  it("prewarms belongs-to includes without changing the enumerable row shape", async () => {
     const { Post, User } = defineAuthorModels();
     client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
     await seedAuthorModels(client, User, Post);
 
     const posts = await client.query(Post).include("author").orderBy("title", "asc").all();
+    const firstAuthorPromise = posts[0].author;
 
+    expect(firstAuthorPromise).toBeInstanceOf(Promise);
+    expect(firstAuthorPromise).toBe(posts[0].author);
+    await expect(firstAuthorPromise).resolves.toEqual({
+      id: "user-1",
+      email: "alice@example.com"
+    });
     expect(posts).toEqual([
-      {
-        id: "post-1",
-        userId: "user-1",
-        title: "Alpha",
-        author: {
-          id: "user-1",
-          email: "alice@example.com"
-        }
-      },
-      {
-        id: "post-2",
-        userId: "user-2",
-        title: "Beta",
-        author: {
-          id: "user-2",
-          email: "bob@example.com"
-        }
-      },
-      {
-        id: "post-3",
-        userId: "user-1",
-        title: "Gamma",
-        author: {
-          id: "user-1",
-          email: "alice@example.com"
-        }
-      }
+      { id: "post-1", userId: "user-1", title: "Alpha" },
+      { id: "post-2", userId: "user-2", title: "Beta" },
+      { id: "post-3", userId: "user-1", title: "Gamma" }
     ]);
+    expect(Object.keys(posts[0])).toEqual(["id", "userId", "title"]);
+    expect(JSON.parse(JSON.stringify(posts[0]))).toEqual({
+      id: "post-1",
+      userId: "user-1",
+      title: "Alpha"
+    });
   });
 
-  it("hydrates has-many includes without duplicating the base rows", async () => {
+  it("prewarms has-many includes without changing the enumerable row shape", async () => {
     const { Post, User } = defineAuthorModels();
     client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
     await seedAuthorModels(client, User, Post);
 
     const users = await client.query(User).include("posts").orderBy("email", "asc").all();
 
-    expect(users).toEqual([
-      {
-        id: "user-1",
-        email: "alice@example.com",
-        posts: [
-          { id: "post-1", userId: "user-1", title: "Alpha" },
-          { id: "post-3", userId: "user-1", title: "Gamma" }
-        ]
-      },
-      {
-        id: "user-2",
-        email: "bob@example.com",
-        posts: [{ id: "post-2", userId: "user-2", title: "Beta" }]
-      }
+    expect(users[0].posts).toBeInstanceOf(Promise);
+    await expect(users[0].posts).resolves.toEqual([
+      { id: "post-1", userId: "user-1", title: "Alpha" },
+      { id: "post-3", userId: "user-1", title: "Gamma" }
     ]);
+    expect(users).toEqual([
+      { id: "user-1", email: "alice@example.com" },
+      { id: "user-2", email: "bob@example.com" }
+    ]);
+    expect(Object.keys(users[0])).toEqual(["id", "email"]);
   });
 
-  it("supports explicit lazy loading for single entities and batches", async () => {
+  it("supports implicit lazy loading for belongs-to query entities", async () => {
     const { Post, User } = defineAuthorModels();
     client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
     await seedAuthorModels(client, User, Post);
 
     const posts = await client.query(Post).orderBy("title", "asc").all();
-    const firstAuthor = await client.load(Post, posts[0], "author");
+    const firstAuthorPromise = posts[0].author;
+    const loadedAuthor = await client.load(Post, posts[0], "author");
     await client.loadMany(Post, posts, "author");
 
-    expect(firstAuthor).toEqual({
+    expect(posts[0]).toBeInstanceOf(Post);
+    expect(firstAuthorPromise).toBeInstanceOf(Promise);
+    expect(firstAuthorPromise).toBe(posts[0].author);
+    await expect(firstAuthorPromise).resolves.toEqual({
       id: "user-1",
       email: "alice@example.com"
     });
-    expect(posts).toEqual([
+    expect(loadedAuthor).toEqual({
+      id: "user-1",
+      email: "alice@example.com"
+    });
+    await expect(Promise.all(posts.map((post) => post.author))).resolves.toEqual([
+      { id: "user-1", email: "alice@example.com" },
+      { id: "user-2", email: "bob@example.com" },
+      { id: "user-1", email: "alice@example.com" }
+    ]);
+    expect(Object.keys(posts[0])).toEqual(["id", "userId", "title"]);
+  });
+
+  it("keeps explicit load and loadMany as the plain-object relation path", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+
+    const repository = client.repository(Post);
+    const firstPost = await repository.findById("post-1");
+    const plainPosts = await repository.findMany({
+      orderBy: { field: "title", direction: "asc" }
+    });
+
+    expect(firstPost).toEqual({
+      id: "post-1",
+      userId: "user-1",
+      title: "Alpha"
+    });
+
+    await expect(client.load(Post, firstPost!, "author")).resolves.toEqual({
+      id: "user-1",
+      email: "alice@example.com"
+    });
+    await client.loadMany(Post, plainPosts, "author");
+
+    expect(firstPost).toEqual({
+      id: "post-1",
+      userId: "user-1",
+      title: "Alpha",
+      author: {
+        id: "user-1",
+        email: "alice@example.com"
+      }
+    });
+    expect(plainPosts).toEqual([
       {
         id: "post-1",
         userId: "user-1",
@@ -229,7 +262,7 @@ describe("@ezorm/orm", () => {
     ]);
   });
 
-  it("supports first, limit, and offset on the read builder", async () => {
+  it("supports first, limit, and offset on entity queries", async () => {
     const { Post, User } = defineAuthorModels();
     client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
     await seedAuthorModels(client, User, Post);
@@ -245,6 +278,83 @@ describe("@ezorm/orm", () => {
     ]);
 
     await expect(client.query(Post).where("title", "=", "Missing").first()).resolves.toBeUndefined();
+  });
+
+  it("supports root-field select projections", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+
+    const rows = await client
+      .query(Post)
+      .select<{ id: string; title: string }>({
+        id: "id",
+        title: "title"
+      })
+      .orderBy("title", "asc")
+      .all();
+
+    expect(rows).toEqual([
+      { id: "post-1", title: "Alpha" },
+      { id: "post-2", title: "Beta" },
+      { id: "post-3", title: "Gamma" }
+    ]);
+  });
+
+  it("supports joined flat-field select projections", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+
+    const rows = await client
+      .query(Post)
+      .join("author")
+      .where("author.email", "=", "alice@example.com")
+      .select<{ title: string; authorEmail: string }>({
+        title: "title",
+        authorEmail: "author.email"
+      })
+      .orderBy("title", "asc")
+      .all();
+
+    expect(rows).toEqual([
+      { title: "Alpha", authorEmail: "alice@example.com" },
+      { title: "Gamma", authorEmail: "alice@example.com" }
+    ]);
+  });
+
+  it("rejects select projections that reference unjoined relations", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+
+    await expect(
+      client
+        .query(Post)
+        .select<{ authorEmail: string }>({ authorEmail: "author.email" })
+        .all()
+    ).rejects.toThrow("Relation author must be joined before using author.email");
+  });
+
+  it("rejects include after select projection mode", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+    const builder = client
+      .query(Post)
+      .select<{ title: string }>({ title: "title" }) as unknown as QueryBuilder<InstanceType<typeof Post>>;
+
+    expect(() => builder.include("author")).toThrow("Cannot use include() on a projection query");
+  });
+
+  it("rejects select after include entity mode", async () => {
+    const { Post, User } = defineAuthorModels();
+    client = await createOrmClient({ databaseUrl: "sqlite::memory:" });
+    await seedAuthorModels(client, User, Post);
+
+    expect(() =>
+      client!.query(Post).include("author").select<{ title: string }>({ title: "title" })
+    ).toThrow("Cannot use select() on a query with include()");
   });
 
   it("creates many-to-many join tables during schema push", async () => {
@@ -291,71 +401,57 @@ describe("@ezorm/orm", () => {
     ]);
   });
 
-  it("hydrates many-to-many includes without duplicating the base rows", async () => {
+  it("prewarms many-to-many includes without changing the enumerable row shape", async () => {
     const { Post, Tag } = defineTagModels();
     client = await createOrmClientForManyToMany();
     await seedTagModels(client, Post, Tag);
 
     const posts = await client.query(Post).include("tags").orderBy("title", "asc").all();
 
+    expect(posts[0].tags).toBeInstanceOf(Promise);
+    await expect(posts[0].tags).resolves.toEqual([
+      { id: "tag-1", label: "orm" },
+      { id: "tag-2", label: "sqlite" }
+    ]);
     expect(posts).toEqual([
-      {
-        id: "post-1",
-        title: "Alpha",
-        tags: [
-          { id: "tag-1", label: "orm" },
-          { id: "tag-2", label: "sqlite" }
-        ]
-      },
-      {
-        id: "post-2",
-        title: "Beta",
-        tags: [{ id: "tag-1", label: "orm" }]
-      },
-      {
-        id: "post-3",
-        title: "Gamma",
-        tags: [{ id: "tag-3", label: "docs" }]
-      }
+      { id: "post-1", title: "Alpha" },
+      { id: "post-2", title: "Beta" },
+      { id: "post-3", title: "Gamma" }
     ]);
   });
 
-  it("supports explicit lazy loading for many-to-many relations", async () => {
+  it("supports implicit lazy loading for many-to-many query entities", async () => {
     const { Post, Tag } = defineTagModels();
     client = await createOrmClientForManyToMany();
     await seedTagModels(client, Post, Tag);
 
     const posts = await client.query(Post).orderBy("title", "asc").all();
-    const firstTags = await client.load(Post, posts[0], "tags");
+    const firstTagsPromise = posts[0].tags;
+    const loadedTags = await client.load(Post, posts[0], "tags");
     await client.loadMany(Post, posts, "tags");
 
-    expect(firstTags).toEqual([
+    expect(firstTagsPromise).toBeInstanceOf(Promise);
+    expect(firstTagsPromise).toBe(posts[0].tags);
+    await expect(firstTagsPromise).resolves.toEqual([
       { id: "tag-1", label: "orm" },
       { id: "tag-2", label: "sqlite" }
     ]);
-    expect(posts).toEqual([
-      {
-        id: "post-1",
-        title: "Alpha",
-        tags: [
-          { id: "tag-1", label: "orm" },
-          { id: "tag-2", label: "sqlite" }
-        ]
-      },
-      {
-        id: "post-2",
-        title: "Beta",
-        tags: [{ id: "tag-1", label: "orm" }]
-      },
-      {
-        id: "post-3",
-        title: "Gamma",
-        tags: [{ id: "tag-3", label: "docs" }]
-      }
+    expect(loadedTags).toEqual([
+      { id: "tag-1", label: "orm" },
+      { id: "tag-2", label: "sqlite" }
     ]);
+    await expect(Promise.all(posts.map((post) => post.tags))).resolves.toEqual([
+      [
+        { id: "tag-1", label: "orm" },
+        { id: "tag-2", label: "sqlite" }
+      ],
+      [{ id: "tag-1", label: "orm" }],
+      [{ id: "tag-3", label: "docs" }]
+    ]);
+    expect(Object.keys(posts[0])).toEqual(["id", "title"]);
   });
 
-  it("supports first, limit, and offset on many-to-many joins", async () => {
+  it("supports first, limit, and offset on many-to-many entity queries", async () => {
     const { Post, Tag } = defineTagModels();
     client = await createOrmClientForManyToMany();
     await seedTagModels(client, Post, Tag);
@@ -367,6 +463,35 @@ describe("@ezorm/orm", () => {
     await expect(
       client.query(Post).join("tags").where("tags.label", "=", "docs").first()
     ).resolves.toEqual({ id: "post-3", title: "Gamma" });
+  });
+
+  it("supports select projections on many-to-many joins", async () => {
+    const { Post, Tag } = defineTagModels();
+    client = await createOrmClientForManyToMany();
+    await seedTagModels(client, Post, Tag);
+
+    await expect(
+      client
+        .query(Post)
+        .join("tags")
+        .select<{ id: string }>({ id: "id" })
+        .orderBy("title", "asc")
+        .offset(1)
+        .limit(1)
+        .all()
+    ).resolves.toEqual([{ id: "post-2" }]);
+
+    await expect(
+      client
+        .query(Post)
+        .join("tags")
+        .where("tags.label", "=", "docs")
+        .select<{ id: string; tagLabel: string }>({
+          id: "id",
+          tagLabel: "tags.label"
+        })
+        .first()
+    ).resolves.toEqual({ id: "post-3", tagLabel: "docs" });
   });
 });
 

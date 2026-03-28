@@ -14,6 +14,7 @@ type DatabaseValue = string | number | null;
 type QueryOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "like";
 type SortDirection = "asc" | "desc";
 type JoinType = "inner" | "left";
+type MaterializationMode = "entity" | "plain";
 type SupportedRelationMetadata =
   | BelongsToRelationMetadata
   | HasManyRelationMetadata
@@ -39,17 +40,29 @@ export interface Repository<T extends object> {
   delete(id: string): Promise<void>;
 }
 
-export interface QueryBuilder<T extends object> {
-  where(field: string, operator: QueryOperator, value: SqlScalar): QueryBuilder<T>;
-  orderBy(field: string, direction?: SortDirection): QueryBuilder<T>;
-  limit(count: number): QueryBuilder<T>;
-  offset(count: number): QueryBuilder<T>;
-  join(relationName: string): QueryBuilder<T>;
-  leftJoin(relationName: string): QueryBuilder<T>;
-  include(relationName: string): QueryBuilder<T>;
-  all(): Promise<T[]>;
-  first(): Promise<T | undefined>;
+interface QueryBuilderBase<TResult extends object, TSelf> {
+  where(field: string, operator: QueryOperator, value: SqlScalar): TSelf;
+  orderBy(field: string, direction?: SortDirection): TSelf;
+  limit(count: number): TSelf;
+  offset(count: number): TSelf;
+  join(relationName: string): TSelf;
+  leftJoin(relationName: string): TSelf;
+  all(): Promise<TResult[]>;
+  first(): Promise<TResult | undefined>;
 }
+
+export interface ProjectionQueryBuilder<TResult extends object>
+  extends QueryBuilderBase<TResult, ProjectionQueryBuilder<TResult>> {}
+
+export interface EntityQueryBuilder<T extends object>
+  extends QueryBuilderBase<T, EntityQueryBuilder<T>> {
+  include(relationName: string): EntityQueryBuilder<T>;
+  select<Row extends object>(
+    shape: Record<Extract<keyof Row, string>, string>
+  ): ProjectionQueryBuilder<Row>;
+}
+
+export interface QueryBuilder<T extends object> extends EntityQueryBuilder<T> {}
 
 export interface OrmClient {
   repository<T extends object>(model: ModelClass<T>): Repository<T>;
@@ -125,7 +138,35 @@ interface QueryOrder {
   direction: SortDirection;
 }
 
+interface QueryProjection {
+  alias: string;
+  fieldPath: string;
+}
+
+interface ResolvedFieldReference {
+  reference: string;
+  field: FieldMetadata;
+}
+
+interface ResolvedProjection {
+  alias: string;
+  field: FieldMetadata;
+  reference: string;
+}
+
+interface LazyRelationCacheEntry {
+  loaded: boolean;
+  promise: Promise<unknown>;
+  value: unknown;
+}
+
+interface LazyEntityState<T extends object> {
+  model: ModelClass<T>;
+  relationCache: Map<string, LazyRelationCacheEntry>;
+}
+
 const MANY_TO_MANY_SOURCE_KEY_ALIAS = "__ezorm_source_key";
+const ENTITY_STATE = Symbol("ezorm.entity.state");
 
 export async function createOrmClient(options: OrmClientOptions): Promise<OrmClient> {
   const database = new DatabaseSync(resolveSqliteFilename(options.databaseUrl));
@@ -300,11 +341,11 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
         async findById(id) {
           await ensureTable(model);
-          return createQueryBuilder(context, model).where(primaryKey.name, "=", id).first();
+          return createQueryBuilder(context, model, "plain").where(primaryKey.name, "=", id).first();
         },
 
         async findMany(options = {}) {
-          const builder = createQueryBuilder(context, model);
+          const builder = createQueryBuilder(context, model, "plain");
           for (const [field, value] of Object.entries(options.where ?? {})) {
             if (value !== undefined) {
               builder.where(field, "=", value as SqlScalar);
@@ -363,12 +404,12 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
     },
 
     query<T extends object>(model: ModelClass<T>): QueryBuilder<T> {
-      return createQueryBuilder(context, model);
+      return createQueryBuilder(context, model, "entity");
     },
 
     async load<T extends object>(model: ModelClass<T>, entity: T, relationName: string): Promise<unknown> {
       await loadMany(model, [entity], relationName);
-      return readEntityValue(entity, relationName);
+      return readLoadedRelationValue(entity, relationName);
     },
 
     loadMany,
@@ -416,38 +457,43 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
 function createQueryBuilder<T extends object>(
   context: SqliteOrmContext,
-  model: ModelClass<T>
-): QueryBuilder<T> {
-  return new SqliteQueryBuilder(context, model);
+  model: ModelClass<T>,
+  materializationMode: MaterializationMode = "entity"
+): SqliteQueryBuilder<T> {
+  return new SqliteQueryBuilder(context, model, materializationMode);
 }
 
-class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
+class SqliteQueryBuilder<TModel extends object, TResult extends object = TModel>
+  implements ProjectionQueryBuilder<TResult>
+{
   private readonly metadata: ModelMetadata;
   private readonly joins = new Map<string, JoinedRelation>();
   private readonly includes = new Set<string>();
   private readonly conditions: QueryCondition[] = [];
   private readonly orderBys: QueryOrder[] = [];
+  private projections?: QueryProjection[];
   private rowLimit?: number;
   private rowOffset?: number;
 
   constructor(
     private readonly context: SqliteOrmContext,
-    private readonly model: ModelClass<T>
+    private readonly model: ModelClass<TModel>,
+    private readonly materializationMode: MaterializationMode
   ) {
     this.metadata = getModelMetadata(model);
   }
 
-  where(field: string, operator: QueryOperator, value: SqlScalar): QueryBuilder<T> {
+  where(field: string, operator: QueryOperator, value: SqlScalar): this {
     this.conditions.push({ field, operator, value });
     return this;
   }
 
-  orderBy(field: string, direction: SortDirection = "asc"): QueryBuilder<T> {
+  orderBy(field: string, direction: SortDirection = "asc"): this {
     this.orderBys.push({ field, direction });
     return this;
   }
 
-  limit(count: number): QueryBuilder<T> {
+  limit(count: number): this {
     if (!Number.isInteger(count) || count < 0) {
       throw new Error("Query limit must be a non-negative integer");
     }
@@ -455,7 +501,7 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     return this;
   }
 
-  offset(count: number): QueryBuilder<T> {
+  offset(count: number): this {
     if (!Number.isInteger(count) || count < 0) {
       throw new Error("Query offset must be a non-negative integer");
     }
@@ -463,27 +509,54 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     return this;
   }
 
-  join(relationName: string): QueryBuilder<T> {
+  join(relationName: string): this {
     this.ensureJoin(relationName, "inner");
     return this;
   }
 
-  leftJoin(relationName: string): QueryBuilder<T> {
+  leftJoin(relationName: string): this {
     this.ensureJoin(relationName, "left");
     return this;
   }
 
-  include(relationName: string): QueryBuilder<T> {
+  include(relationName: string): QueryBuilder<TModel> {
+    if (this.projections) {
+      throw new Error("Cannot use include() on a projection query");
+    }
     resolveRelationPlan(this.metadata, relationName);
     this.includes.add(relationName);
-    return this;
+    return this as unknown as QueryBuilder<TModel>;
   }
 
-  async all(): Promise<T[]> {
+  select<Row extends object>(
+    shape: Record<Extract<keyof Row, string>, string>
+  ): ProjectionQueryBuilder<Row> {
+    if (this.includes.size > 0) {
+      throw new Error("Cannot use select() on a query with include()");
+    }
+
+    const entries = Object.entries(shape);
+    if (entries.length === 0) {
+      throw new Error("Query select() requires at least one projected field");
+    }
+
+    const aliases = entries.map(([alias]) => alias);
+    if (new Set(aliases).size !== aliases.length) {
+      throw new Error("Query select() aliases must be unique");
+    }
+
+    this.projections = entries.map(([alias, fieldPath]) => ({
+      alias,
+      fieldPath: String(fieldPath)
+    }));
+    return this as unknown as ProjectionQueryBuilder<Row>;
+  }
+
+  async all(): Promise<TResult[]> {
     return this.executeAll();
   }
 
-  async first(): Promise<T | undefined> {
+  async first(): Promise<TResult | undefined> {
     const rows = await this.executeAll(1);
     return rows[0];
   }
@@ -503,7 +576,7 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     });
   }
 
-  private async executeAll(overrideLimit?: number): Promise<T[]> {
+  private async executeAll(overrideLimit?: number): Promise<TResult[]> {
     await this.context.ensureTable(this.model);
     for (const joinedRelation of this.joins.values()) {
       await this.context.ensureTable(joinedRelation.plan.targetMetadata.target);
@@ -544,8 +617,12 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
           : " LIMIT -1"
         : ` LIMIT ${effectiveLimit}`;
     const offsetSql = this.rowOffset === undefined ? "" : ` OFFSET ${this.rowOffset}`;
+    const projections = this.resolveProjections();
+    const selectClause =
+      projections?.map((projection) => `${projection.reference} AS ${quoteIdentifier(projection.alias)}`).join(", ") ??
+      "t0.*";
     const sql = [
-      `${hasManyToManyJoin ? "SELECT DISTINCT" : "SELECT"} t0.* FROM ${quoteIdentifier(
+      `${hasManyToManyJoin ? "SELECT DISTINCT" : "SELECT"} ${selectClause} FROM ${quoteIdentifier(
         this.metadata.table
       )} t0`,
       joinSql ? ` ${joinSql}` : "",
@@ -556,16 +633,25 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     ].join("");
 
     const rows = this.context.database.prepare(sql).all(...params) as Array<Record<string, unknown>>;
-    const mappedRows = rows.map((row) => mapRow(this.metadata, row) as T);
+
+    if (projections) {
+      return rows.map((row) => mapProjectionRow(projections, row) as TResult);
+    }
+
+    const mappedRows = rows.map((row) =>
+      this.materializationMode === "entity"
+        ? materializeQueryEntity(this.context, this.model, this.metadata, row)
+        : (mapRow(this.metadata, row) as TModel)
+    );
 
     for (const relationName of this.includes) {
       await this.context.loadMany(this.model, mappedRows, relationName);
     }
 
-    return mappedRows;
+    return mappedRows as unknown as TResult[];
   }
 
-  private resolveField(fieldPath: string): { reference: string; field: FieldMetadata } {
+  private resolveField(fieldPath: string): ResolvedFieldReference {
     if (!fieldPath.includes(".")) {
       return {
         reference: `t0.${quoteIdentifier(fieldPath)}`,
@@ -583,6 +669,21 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
       reference: `${joinedRelation.alias}.${quoteIdentifier(fieldName)}`,
       field: fieldMetadata(joinedRelation.plan.targetMetadata, fieldName)
     };
+  }
+
+  private resolveProjections(): ResolvedProjection[] | undefined {
+    if (!this.projections) {
+      return undefined;
+    }
+
+    return this.projections.map((projection) => {
+      const resolved = this.resolveField(projection.fieldPath);
+      return {
+        alias: projection.alias,
+        field: resolved.field,
+        reference: resolved.reference
+      };
+    });
   }
 }
 
@@ -709,8 +810,28 @@ function readEntityValue(entity: object, key: string): unknown {
   return (entity as Record<string, unknown>)[key];
 }
 
+function readLoadedRelationValue(entity: object, relationName: string): unknown {
+  const state = getLazyEntityState(entity);
+  if (!state) {
+    return readEntityValue(entity, relationName);
+  }
+
+  return state.relationCache.get(relationName)?.value;
+}
+
 function assignRelation(entity: object, relationName: string, value: unknown): void {
-  (entity as Record<string, unknown>)[relationName] = value;
+  const state = getLazyEntityState(entity);
+  if (!state) {
+    (entity as Record<string, unknown>)[relationName] = value;
+    return;
+  }
+
+  const existing = state.relationCache.get(relationName);
+  state.relationCache.set(relationName, {
+    loaded: true,
+    promise: existing?.promise ?? Promise.resolve(value),
+    value
+  });
 }
 
 function resolveSqliteFilename(databaseUrl: string): string {
@@ -779,6 +900,97 @@ function mapRow(metadata: ModelMetadata, row: Record<string, unknown>): Record<s
     mapped[field.name] = fromDatabaseValue(field, row[field.name]);
   }
   return mapped;
+}
+
+function mapProjectionRow(
+  projections: ResolvedProjection[],
+  row: Record<string, unknown>
+): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {};
+  for (const projection of projections) {
+    mapped[projection.alias] = fromDatabaseValue(projection.field, row[projection.alias]);
+  }
+  return mapped;
+}
+
+function materializeQueryEntity<T extends object>(
+  context: SqliteOrmContext,
+  model: ModelClass<T>,
+  metadata: ModelMetadata,
+  row: Record<string, unknown>
+): T {
+  const entity = new model();
+  const mapped = mapRow(metadata, row);
+
+  for (const field of metadata.fields) {
+    (entity as Record<string, unknown>)[field.name] = mapped[field.name];
+  }
+
+  Object.defineProperty(entity, ENTITY_STATE, {
+    value: {
+      model,
+      relationCache: new Map<string, LazyRelationCacheEntry>()
+    } satisfies LazyEntityState<T>,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+
+  for (const relation of metadata.relations) {
+    if (
+      relation.kind !== "belongsTo" &&
+      relation.kind !== "hasMany" &&
+      relation.kind !== "manyToMany"
+    ) {
+      continue;
+    }
+
+    Object.defineProperty(entity, relation.name, {
+      configurable: true,
+      enumerable: false,
+      get() {
+        return getOrCreateLazyRelationPromise(context, entity, model, relation.name);
+      },
+      set(value: unknown) {
+        assignRelation(entity, relation.name, value);
+      }
+    });
+  }
+
+  return entity;
+}
+
+function getOrCreateLazyRelationPromise<T extends object>(
+  context: SqliteOrmContext,
+  entity: T,
+  model: ModelClass<T>,
+  relationName: string
+): Promise<unknown> {
+  const state = getLazyEntityState(entity);
+  if (!state) {
+    return Promise.resolve(readEntityValue(entity, relationName));
+  }
+
+  const cached = state.relationCache.get(relationName);
+  if (cached) {
+    return cached.promise;
+  }
+
+  const promise = context.loadMany(model, [entity], relationName).then(() => {
+    return readLoadedRelationValue(entity, relationName);
+  });
+
+  state.relationCache.set(relationName, {
+    loaded: false,
+    promise,
+    value: undefined
+  });
+
+  return promise;
+}
+
+function getLazyEntityState<T extends object>(entity: object): LazyEntityState<T> | undefined {
+  return (entity as Record<PropertyKey, unknown>)[ENTITY_STATE] as LazyEntityState<T> | undefined;
 }
 
 function toDatabaseValue(field: FieldMetadata, value: unknown): DatabaseValue {

@@ -80,6 +80,22 @@ describe("@ezorm/runtime-proxy", () => {
       message: "database is unavailable"
     });
   });
+
+  it("exposes select on the unsupported query builder and rejects execution", async () => {
+    const client = new ProxyOrmClient({
+      endpoint: "http://runtime.internal",
+      fetchImpl: vi.fn<typeof fetch>()
+    });
+
+    await expect(
+      client
+        .query(User)
+        .select<{ email: string }>({ email: "email" })
+        .all()
+    ).rejects.toThrow(
+      "@ezorm/runtime-proxy does not support relation-aware queries or loaders yet"
+    );
+  });
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
