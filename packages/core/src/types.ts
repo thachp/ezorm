@@ -22,11 +22,49 @@ export interface IndexMetadata {
   unique?: boolean;
 }
 
-export interface RelationMetadata {
-  kind: "hasOne" | "hasMany" | "belongsTo" | "manyToMany";
+export interface BelongsToOptions {
+  foreignKey: string;
+  targetKey: string;
+}
+
+export interface HasManyOptions {
+  localKey: string;
+  foreignKey: string;
+}
+
+export interface HasOneRelationMetadata {
+  kind: "hasOne";
   name: string;
   target: () => Function;
 }
+
+export interface ManyToManyRelationMetadata {
+  kind: "manyToMany";
+  name: string;
+  target: () => Function;
+}
+
+export interface BelongsToRelationMetadata {
+  kind: "belongsTo";
+  name: string;
+  target: () => Function;
+  foreignKey: string;
+  targetKey: string;
+}
+
+export interface HasManyRelationMetadata {
+  kind: "hasMany";
+  name: string;
+  target: () => Function;
+  localKey: string;
+  foreignKey: string;
+}
+
+export type RelationMetadata =
+  | HasOneRelationMetadata
+  | ManyToManyRelationMetadata
+  | BelongsToRelationMetadata
+  | HasManyRelationMetadata;
 
 export interface ModelMetadata {
   kind: ModelKind;

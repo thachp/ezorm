@@ -63,7 +63,7 @@ Current example workflows:
 - `@ezorm/core` owns metadata, validation, indices, and relation declarations.
 - `@ezorm/orm` owns schema push/pull and CRUD behavior through repositories.
 - Keep primary key handling simple in v1: application-supplied keys and single-column primary keys only.
-- Relations are descriptive metadata today; do not add implicit join loading or lazy-loading behavior without a clear API decision.
+- Relation-aware reads should go through explicit key-mapped `BelongsTo` / `HasMany` metadata, `client.query(...)`, and explicit `load(...)` or `loadMany(...)` calls.
 - CLI and adapters should route through shared ORM client/repository helpers instead of embedding SQL logic inline.
 
 ## Guardrails

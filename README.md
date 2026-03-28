@@ -141,7 +141,68 @@ The repository surface is intentionally small in v1:
 - `update`
 - `delete`
 
-`findMany` supports exact-match scalar filters and simple ordering. Relations are metadata-only today and are not loaded automatically.
+`findMany` still supports exact-match scalar filters and simple ordering for single-table CRUD.
+
+For relation-aware reads, use the read query builder and explicit loaders:
+
+```ts
+import { BelongsTo, Field, HasMany, Model, PrimaryKey } from "@ezorm/core";
+import { createOrmClient } from "@ezorm/orm";
+
+@Model({ table: "users" })
+class User {
+  @PrimaryKey()
+  @Field.string()
+  id!: string;
+
+  @Field.string()
+  email!: string;
+
+  @HasMany(() => Post, { localKey: "id", foreignKey: "userId" })
+  posts!: Post[];
+}
+
+@Model({ table: "posts" })
+class Post {
+  @PrimaryKey()
+  @Field.string()
+  id!: string;
+
+  @Field.string()
+  userId!: string;
+
+  @Field.string()
+  title!: string;
+
+  @BelongsTo(() => User, { foreignKey: "userId", targetKey: "id" })
+  author!: User | undefined;
+}
+
+const client = await createOrmClient({
+  databaseUrl: "sqlite::memory:"
+});
+
+await client.pushSchema([User, Post]);
+
+const posts = await client
+  .query(Post)
+  .join("author")
+  .where("author.email", "=", "alice@example.com")
+  .include("author")
+  .orderBy("title", "asc")
+  .all();
+
+const users = await client.query(User).include("posts").all();
+await client.load(Post, posts[0], "author");
+```
+
+Current relation support is intentionally narrow:
+
+- `BelongsTo` and `HasMany` only
+- explicit key mappings are required
+- `client.query(Model)` is read-only
+- `include(...)`, `load(...)`, and `loadMany(...)` are explicit async APIs
+- no many-to-many, no implicit property lazy loading, and no custom `select()` builder yet
 
 ## CLI Workflows Available Today
 

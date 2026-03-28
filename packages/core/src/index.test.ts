@@ -29,7 +29,7 @@ describe("@ezorm/core", () => {
       @Field.string()
       email!: string;
 
-      @HasMany(() => UserProfile)
+      @HasMany(() => UserProfile, { localKey: "id", foreignKey: "userId" })
       profiles!: unknown[];
     }
 
@@ -39,7 +39,10 @@ describe("@ezorm/core", () => {
       @Field.string()
       id!: string;
 
-      @BelongsTo(() => User)
+      @Field.string()
+      userId!: string;
+
+      @BelongsTo(() => User, { foreignKey: "userId", targetKey: "id" })
       user!: unknown;
     }
 
@@ -48,7 +51,33 @@ describe("@ezorm/core", () => {
     expect(metadata.table).toBe("users");
     expect(metadata.fields.map((field) => field.name)).toEqual(["id", "email"]);
     expect(metadata.indices).toHaveLength(2);
-    expect(metadata.relations[0]).toMatchObject({ kind: "hasMany", name: "profiles" });
+    expect(metadata.relations[0]).toMatchObject({
+      kind: "hasMany",
+      name: "profiles",
+      localKey: "id",
+      foreignKey: "userId"
+    });
+  });
+
+  it("fails fast when relation keys point at unknown fields", () => {
+    @Model()
+    class User {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    @Model()
+    class Comment {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @BelongsTo(() => User, { foreignKey: "authorId", targetKey: "id" })
+      author!: unknown;
+    }
+
+    expect(() => getModelMetadata(Comment)).toThrow("Unknown field authorId on model Comment");
   });
 
   it("validates DTO input using field definitions", () => {

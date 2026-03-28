@@ -1,7 +1,13 @@
 import type {
+  BelongsToOptions,
+  BelongsToRelationMetadata,
   FieldMetadata,
   FieldOptions,
+  HasManyRelationMetadata,
+  HasOneRelationMetadata,
+  HasManyOptions,
   IndexMetadata,
+  ManyToManyRelationMetadata,
   ModelOptions,
   ModelKind,
   ModelMetadata,
@@ -10,6 +16,11 @@ import type {
 } from "./types";
 
 const registry = new Map<Function, ModelMetadata>();
+type PendingRelation =
+  | Omit<HasOneRelationMetadata, "name">
+  | Omit<ManyToManyRelationMetadata, "name">
+  | Omit<BelongsToRelationMetadata, "name">
+  | Omit<HasManyRelationMetadata, "name">;
 
 function ensureModel(target: Function, options?: { kind?: ModelKind; table?: string }): ModelMetadata {
   const existing = registry.get(target);
@@ -48,7 +59,7 @@ function addField(target: object, propertyKey: string | symbol, field: Partial<F
   });
 }
 
-function addRelation(target: object, propertyKey: string | symbol, relation: Omit<RelationMetadata, "name">): void {
+function addRelation(target: object, propertyKey: string | symbol, relation: PendingRelation): void {
   const ctor = target.constructor;
   const metadata = ensureModel(ctor);
   metadata.relations.push({
@@ -126,12 +137,24 @@ export function HasOne(targetModel: () => Function): PropertyDecorator {
   return (target, propertyKey) => addRelation(target, propertyKey, { kind: "hasOne", target: targetModel });
 }
 
-export function HasMany(targetModel: () => Function): PropertyDecorator {
-  return (target, propertyKey) => addRelation(target, propertyKey, { kind: "hasMany", target: targetModel });
+export function HasMany(targetModel: () => Function, options: HasManyOptions): PropertyDecorator {
+  return (target, propertyKey) =>
+    addRelation(target, propertyKey, {
+      kind: "hasMany",
+      target: targetModel,
+      localKey: options.localKey,
+      foreignKey: options.foreignKey
+    });
 }
 
-export function BelongsTo(targetModel: () => Function): PropertyDecorator {
-  return (target, propertyKey) => addRelation(target, propertyKey, { kind: "belongsTo", target: targetModel });
+export function BelongsTo(targetModel: () => Function, options: BelongsToOptions): PropertyDecorator {
+  return (target, propertyKey) =>
+    addRelation(target, propertyKey, {
+      kind: "belongsTo",
+      target: targetModel,
+      foreignKey: options.foreignKey,
+      targetKey: options.targetKey
+    });
 }
 
 export function ManyToMany(targetModel: () => Function): PropertyDecorator {
@@ -139,11 +162,16 @@ export function ManyToMany(targetModel: () => Function): PropertyDecorator {
 }
 
 export function getModelMetadata(target: Function): ModelMetadata {
-  return cloneMetadata(ensureModel(target));
+  const metadata = ensureModel(target);
+  validateModelMetadata(metadata);
+  return cloneMetadata(metadata);
 }
 
 export function listModelMetadata(): ModelMetadata[] {
-  return [...registry.values()].map((item) => cloneMetadata(item));
+  return [...registry.values()].map((item) => {
+    validateModelMetadata(item);
+    return cloneMetadata(item);
+  });
 }
 
 export function clearMetadataRegistry(): void {
@@ -199,6 +227,43 @@ function cloneMetadata(value: ModelMetadata): ModelMetadata {
     indices: value.indices.map((index) => ({ ...index, fields: [...index.fields] })),
     relations: value.relations.map((relation) => ({ ...relation }))
   };
+}
+
+function validateModelMetadata(metadata: ModelMetadata, visited = new Set<Function>()): void {
+  if (visited.has(metadata.target)) {
+    return;
+  }
+
+  visited.add(metadata.target);
+
+  for (const relation of metadata.relations) {
+    switch (relation.kind) {
+      case "belongsTo": {
+        fieldMetadata(metadata, relation.foreignKey);
+        const targetMetadata = ensureModel(relation.target());
+        fieldMetadata(targetMetadata, relation.targetKey);
+        validateModelMetadata(targetMetadata, visited);
+        break;
+      }
+      case "hasMany": {
+        fieldMetadata(metadata, relation.localKey);
+        const targetMetadata = ensureModel(relation.target());
+        fieldMetadata(targetMetadata, relation.foreignKey);
+        validateModelMetadata(targetMetadata, visited);
+        break;
+      }
+      default:
+        validateModelMetadata(ensureModel(relation.target()), visited);
+    }
+  }
+}
+
+function fieldMetadata(metadata: ModelMetadata, name: string): FieldMetadata {
+  const field = metadata.fields.find((item) => item.name === name);
+  if (!field) {
+    throw new Error(`Unknown field ${name} on model ${metadata.name}`);
+  }
+  return field;
 }
 
 function defaultTableName(name: string): string {

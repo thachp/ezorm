@@ -3,6 +3,7 @@ import type {
   FindManyOptions,
   ModelClass,
   OrmClient,
+  QueryBuilder,
   Repository,
   TableSchema
 } from "@ezorm/orm";
@@ -77,6 +78,26 @@ export class ProxyOrmClient implements OrmClient {
     };
   }
 
+  query<T extends object>(_model: ModelClass<T>): QueryBuilder<T> {
+    return new UnsupportedProxyQueryBuilder<T>();
+  }
+
+  async load<T extends object>(
+    _model: ModelClass<T>,
+    _entity: T,
+    _relationName: string
+  ): Promise<unknown> {
+    throw unsupportedRelationError();
+  }
+
+  async loadMany<T extends object>(
+    _model: ModelClass<T>,
+    _entities: T[],
+    _relationName: string
+  ): Promise<T[]> {
+    throw unsupportedRelationError();
+  }
+
   async pushSchema(models: Function[]): Promise<{ statements: string[] }> {
     return this.post("/orm/schema/push", {
       models: models.map((model) => getModelMetadata(model))
@@ -121,6 +142,44 @@ export class ProxyOrmClient implements OrmClient {
   }
 }
 
+class UnsupportedProxyQueryBuilder<T extends object> implements QueryBuilder<T> {
+  where(): QueryBuilder<T> {
+    return this;
+  }
+
+  orderBy(): QueryBuilder<T> {
+    return this;
+  }
+
+  limit(): QueryBuilder<T> {
+    return this;
+  }
+
+  offset(): QueryBuilder<T> {
+    return this;
+  }
+
+  join(): QueryBuilder<T> {
+    return this;
+  }
+
+  leftJoin(): QueryBuilder<T> {
+    return this;
+  }
+
+  include(): QueryBuilder<T> {
+    return this;
+  }
+
+  async all(): Promise<T[]> {
+    throw unsupportedRelationError();
+  }
+
+  async first(): Promise<T | undefined> {
+    throw unsupportedRelationError();
+  }
+}
+
 function parseProxyRuntimeError(rawBody: string): ProxyRuntimeErrorBody | undefined {
   if (!rawBody) {
     return undefined;
@@ -135,4 +194,10 @@ function parseProxyRuntimeError(rawBody: string): ProxyRuntimeErrorBody | undefi
   } catch {
     return undefined;
   }
+}
+
+function unsupportedRelationError(): Error {
+  return new Error(
+    "@ezorm/runtime-proxy does not support relation-aware queries or loaders yet. Use @ezorm/runtime-node for the current SQLite-backed implementation."
+  );
 }

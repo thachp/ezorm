@@ -2,12 +2,19 @@ import { DatabaseSync } from "node:sqlite";
 import {
   getModelMetadata,
   validateModelInput,
+  type BelongsToRelationMetadata,
   type FieldMetadata,
-  type ModelMetadata
+  type HasManyRelationMetadata,
+  type ModelMetadata,
+  type RelationMetadata
 } from "@ezorm/core";
 
 type SqlScalar = string | number | boolean | null;
 type DatabaseValue = string | number | null;
+type QueryOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "like";
+type SortDirection = "asc" | "desc";
+type JoinType = "inner" | "left";
+type SupportedRelationMetadata = BelongsToRelationMetadata | HasManyRelationMetadata;
 
 export interface OrmClientOptions {
   databaseUrl: string;
@@ -17,7 +24,7 @@ export interface FindManyOptions<T extends object> {
   where?: Partial<Record<Extract<keyof T, string>, SqlScalar>>;
   orderBy?: {
     field: Extract<keyof T, string>;
-    direction?: "asc" | "desc";
+    direction?: SortDirection;
   };
 }
 
@@ -29,8 +36,27 @@ export interface Repository<T extends object> {
   delete(id: string): Promise<void>;
 }
 
+export interface QueryBuilder<T extends object> {
+  where(field: string, operator: QueryOperator, value: SqlScalar): QueryBuilder<T>;
+  orderBy(field: string, direction?: SortDirection): QueryBuilder<T>;
+  limit(count: number): QueryBuilder<T>;
+  offset(count: number): QueryBuilder<T>;
+  join(relationName: string): QueryBuilder<T>;
+  leftJoin(relationName: string): QueryBuilder<T>;
+  include(relationName: string): QueryBuilder<T>;
+  all(): Promise<T[]>;
+  first(): Promise<T | undefined>;
+}
+
 export interface OrmClient {
   repository<T extends object>(model: ModelClass<T>): Repository<T>;
+  query<T extends object>(model: ModelClass<T>): QueryBuilder<T>;
+  load<T extends object>(model: ModelClass<T>, entity: T, relationName: string): Promise<unknown>;
+  loadMany<T extends object>(
+    model: ModelClass<T>,
+    entities: T[],
+    relationName: string
+  ): Promise<T[]>;
   pushSchema(models: Function[]): Promise<{ statements: string[] }>;
   pullSchema(): Promise<TableSchema[]>;
   close(): Promise<void>;
@@ -50,6 +76,38 @@ export interface ModelClass<T extends object> {
   new (): T;
 }
 
+interface SqliteOrmContext {
+  database: DatabaseSync;
+  ensureTable(model: Function): Promise<void>;
+  loadMany<T extends object>(model: ModelClass<T>, entities: T[], relationName: string): Promise<T[]>;
+}
+
+interface RelationPlan {
+  relationName: string;
+  kind: SupportedRelationMetadata["kind"];
+  sourceMetadata: ModelMetadata;
+  targetMetadata: ModelMetadata;
+  sourceField: FieldMetadata;
+  targetField: FieldMetadata;
+}
+
+interface JoinedRelation {
+  alias: string;
+  joinType: JoinType;
+  plan: RelationPlan;
+}
+
+interface QueryCondition {
+  field: string;
+  operator: QueryOperator;
+  value: SqlScalar;
+}
+
+interface QueryOrder {
+  field: string;
+  direction: SortDirection;
+}
+
 export async function createOrmClient(options: OrmClientOptions): Promise<OrmClient> {
   const database = new DatabaseSync(resolveSqliteFilename(options.databaseUrl));
   const ensuredTables = new Set<string>();
@@ -65,6 +123,87 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
       database.exec(statement);
     }
     ensuredTables.add(metadata.table);
+  }
+
+  const context: SqliteOrmContext = {
+    database,
+    ensureTable,
+    loadMany
+  };
+
+  async function loadMany<T extends object>(
+    model: ModelClass<T>,
+    entities: T[],
+    relationName: string
+  ): Promise<T[]> {
+    if (entities.length === 0) {
+      return entities;
+    }
+
+    const sourceMetadata = getModelMetadata(model);
+    const plan = resolveRelationPlan(sourceMetadata, relationName);
+    await ensureTable(model);
+    await ensureTable(plan.targetMetadata.target);
+
+    const sourceValues = entities
+      .map((entity) => readEntityValue(entity, plan.sourceField.name))
+      .filter((value): value is Exclude<typeof value, undefined | null> => value !== undefined && value !== null);
+
+    if (sourceValues.length === 0) {
+      for (const entity of entities) {
+        assignRelation(entity, relationName, plan.kind === "hasMany" ? [] : undefined);
+      }
+      return entities;
+    }
+
+    const uniqueValues = [...new Map(sourceValues.map((value) => [String(value), value])).values()];
+    const placeholders = uniqueValues.map(() => "?").join(", ");
+    const rows = database
+      .prepare(
+        `SELECT * FROM ${quoteIdentifier(plan.targetMetadata.table)} WHERE ${quoteIdentifier(
+          plan.targetField.name
+        )} IN (${placeholders})`
+      )
+      .all(...uniqueValues.map((value) => toDatabaseValue(plan.targetField, value))) as Array<
+      Record<string, unknown>
+    >;
+    const mappedRows = rows.map((row) => mapRow(plan.targetMetadata, row));
+
+    if (plan.kind === "belongsTo") {
+      const byTargetKey = new Map(
+        mappedRows.map((row) => [String(row[plan.targetField.name]), row])
+      );
+      for (const entity of entities) {
+        const sourceValue = readEntityValue(entity, plan.sourceField.name);
+        assignRelation(
+          entity,
+          relationName,
+          sourceValue === undefined || sourceValue === null
+            ? undefined
+            : byTargetKey.get(String(sourceValue))
+        );
+      }
+      return entities;
+    }
+
+    const byForeignKey = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of mappedRows) {
+      const key = String(row[plan.targetField.name]);
+      const current = byForeignKey.get(key) ?? [];
+      current.push(row);
+      byForeignKey.set(key, current);
+    }
+    for (const entity of entities) {
+      const sourceValue = readEntityValue(entity, plan.sourceField.name);
+      assignRelation(
+        entity,
+        relationName,
+        sourceValue === undefined || sourceValue === null
+          ? []
+          : (byForeignKey.get(String(sourceValue)) ?? [])
+      );
+    }
+    return entities;
   }
 
   return {
@@ -83,8 +222,8 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
           const fields = metadata.fields.map((field) => field.name);
           const placeholders = fields.map(() => "?").join(", ");
-          const values = fields.map(
-            (field) => toDatabaseValue(fieldMetadata(metadata, field), payload[field])
+          const values = fields.map((field) =>
+            toDatabaseValue(fieldMetadata(metadata, field), payload[field])
           );
 
           database
@@ -100,36 +239,22 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
         async findById(id) {
           await ensureTable(model);
-          const row = database
-            .prepare(
-              `SELECT * FROM ${quoteIdentifier(metadata.table)} WHERE ${quoteIdentifier(primaryKey.name)} = ?`
-            )
-            .get(id) as Record<string, unknown> | undefined;
-          return row ? mapRow(metadata, row) as T : undefined;
+          return createQueryBuilder(context, model)
+            .where(primaryKey.name, "=", id)
+            .first();
         },
 
         async findMany(options = {}) {
-          await ensureTable(model);
-          const whereEntries = Object.entries(options.where ?? {}).filter(([, value]) => value !== undefined);
-          const clauses = whereEntries.map(([field]) => `${quoteIdentifier(field)} = ?`);
-          const orderBy = options.orderBy
-            ? ` ORDER BY ${quoteIdentifier(options.orderBy.field)} ${String(
-                options.orderBy.direction ?? "asc"
-              ).toUpperCase()}`
-            : "";
-          const sql = [
-            `SELECT * FROM ${quoteIdentifier(metadata.table)}`,
-            clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "",
-            orderBy
-          ].join("");
-          const rows = database
-            .prepare(sql)
-            .all(
-              ...whereEntries.map(([field, value]) =>
-                toDatabaseValue(fieldMetadata(metadata, field), value)
-              )
-            ) as Record<string, unknown>[];
-          return rows.map((row) => mapRow(metadata, row) as T);
+          const builder = createQueryBuilder(context, model);
+          for (const [field, value] of Object.entries(options.where ?? {})) {
+            if (value !== undefined) {
+              builder.where(field, "=", value as SqlScalar);
+            }
+          }
+          if (options.orderBy) {
+            builder.orderBy(options.orderBy.field, options.orderBy.direction);
+          }
+          return builder.all();
         },
 
         async update(id, patch) {
@@ -178,6 +303,17 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
       };
     },
 
+    query<T extends object>(model: ModelClass<T>): QueryBuilder<T> {
+      return createQueryBuilder(context, model);
+    },
+
+    async load<T extends object>(model: ModelClass<T>, entity: T, relationName: string): Promise<unknown> {
+      await loadMany(model, [entity], relationName);
+      return readEntityValue(entity, relationName);
+    },
+
+    loadMany,
+
     async pushSchema(models) {
       const statements = models.flatMap((model) => {
         const metadata = getModelMetadata(model);
@@ -218,6 +354,223 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
       database.close();
     }
   };
+}
+
+function createQueryBuilder<T extends object>(
+  context: SqliteOrmContext,
+  model: ModelClass<T>
+): QueryBuilder<T> {
+  return new SqliteQueryBuilder(context, model);
+}
+
+class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
+  private readonly metadata: ModelMetadata;
+  private readonly joins = new Map<string, JoinedRelation>();
+  private readonly includes = new Set<string>();
+  private readonly conditions: QueryCondition[] = [];
+  private readonly orderBys: QueryOrder[] = [];
+  private rowLimit?: number;
+  private rowOffset?: number;
+
+  constructor(
+    private readonly context: SqliteOrmContext,
+    private readonly model: ModelClass<T>
+  ) {
+    this.metadata = getModelMetadata(model);
+  }
+
+  where(field: string, operator: QueryOperator, value: SqlScalar): QueryBuilder<T> {
+    this.conditions.push({ field, operator, value });
+    return this;
+  }
+
+  orderBy(field: string, direction: SortDirection = "asc"): QueryBuilder<T> {
+    this.orderBys.push({ field, direction });
+    return this;
+  }
+
+  limit(count: number): QueryBuilder<T> {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error("Query limit must be a non-negative integer");
+    }
+    this.rowLimit = count;
+    return this;
+  }
+
+  offset(count: number): QueryBuilder<T> {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error("Query offset must be a non-negative integer");
+    }
+    this.rowOffset = count;
+    return this;
+  }
+
+  join(relationName: string): QueryBuilder<T> {
+    this.ensureJoin(relationName, "inner");
+    return this;
+  }
+
+  leftJoin(relationName: string): QueryBuilder<T> {
+    this.ensureJoin(relationName, "left");
+    return this;
+  }
+
+  include(relationName: string): QueryBuilder<T> {
+    resolveRelationPlan(this.metadata, relationName);
+    this.includes.add(relationName);
+    return this;
+  }
+
+  async all(): Promise<T[]> {
+    return this.executeAll();
+  }
+
+  async first(): Promise<T | undefined> {
+    const rows = await this.executeAll(1);
+    return rows[0];
+  }
+
+  private ensureJoin(relationName: string, joinType: JoinType): void {
+    if (this.joins.has(relationName)) {
+      return;
+    }
+
+    const plan = resolveRelationPlan(this.metadata, relationName);
+    this.joins.set(relationName, {
+      alias: `j${this.joins.size + 1}`,
+      joinType,
+      plan
+    });
+  }
+
+  private async executeAll(overrideLimit?: number): Promise<T[]> {
+    await this.context.ensureTable(this.model);
+    for (const joinedRelation of this.joins.values()) {
+      await this.context.ensureTable(joinedRelation.plan.targetMetadata.target);
+    }
+    for (const relationName of this.includes) {
+      const plan = resolveRelationPlan(this.metadata, relationName);
+      await this.context.ensureTable(plan.targetMetadata.target);
+    }
+
+    const params: DatabaseValue[] = [];
+    const joinSql = [...this.joins.values()]
+      .map((joinedRelation) => {
+        const relationAlias = joinedRelation.alias;
+        const sourceReference = `t0.${quoteIdentifier(joinedRelation.plan.sourceField.name)}`;
+        const targetReference = `${relationAlias}.${quoteIdentifier(joinedRelation.plan.targetField.name)}`;
+        return `${joinedRelation.joinType === "left" ? "LEFT JOIN" : "JOIN"} ${quoteIdentifier(
+          joinedRelation.plan.targetMetadata.table
+        )} ${relationAlias} ON ${sourceReference} = ${targetReference}`;
+      })
+      .join(" ");
+
+    const whereSql = this.conditions
+      .map((condition) => {
+        const resolved = this.resolveField(condition.field);
+        params.push(toDatabaseValue(resolved.field, condition.value));
+        return `${resolved.reference} ${normalizeOperator(condition.operator)} ?`;
+      })
+      .join(" AND ");
+
+    const orderSql = this.orderBys
+      .map((order) => {
+        const resolved = this.resolveField(order.field);
+        return `${resolved.reference} ${order.direction.toUpperCase()}`;
+      })
+      .join(", ");
+
+    const effectiveLimit = overrideLimit ?? this.rowLimit;
+    const limitSql =
+      effectiveLimit === undefined
+        ? this.rowOffset === undefined
+          ? ""
+          : " LIMIT -1"
+        : ` LIMIT ${effectiveLimit}`;
+    const offsetSql = this.rowOffset === undefined ? "" : ` OFFSET ${this.rowOffset}`;
+    const sql = [
+      `SELECT t0.* FROM ${quoteIdentifier(this.metadata.table)} t0`,
+      joinSql ? ` ${joinSql}` : "",
+      whereSql ? ` WHERE ${whereSql}` : "",
+      orderSql ? ` ORDER BY ${orderSql}` : "",
+      limitSql,
+      offsetSql
+    ].join("");
+
+    const rows = this.context.database.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+    const mappedRows = rows.map((row) => mapRow(this.metadata, row) as T);
+
+    for (const relationName of this.includes) {
+      await this.context.loadMany(this.model, mappedRows, relationName);
+    }
+
+    return mappedRows;
+  }
+
+  private resolveField(fieldPath: string): { reference: string; field: FieldMetadata } {
+    if (!fieldPath.includes(".")) {
+      return {
+        reference: `t0.${quoteIdentifier(fieldPath)}`,
+        field: fieldMetadata(this.metadata, fieldPath)
+      };
+    }
+
+    const [relationName, fieldName] = fieldPath.split(".", 2);
+    const joinedRelation = this.joins.get(relationName);
+    if (!joinedRelation) {
+      throw new Error(`Relation ${relationName} must be joined before using ${fieldPath}`);
+    }
+
+    return {
+      reference: `${joinedRelation.alias}.${quoteIdentifier(fieldName)}`,
+      field: fieldMetadata(joinedRelation.plan.targetMetadata, fieldName)
+    };
+  }
+}
+
+function resolveRelationPlan(metadata: ModelMetadata, relationName: string): RelationPlan {
+  const relation = metadata.relations.find((item) => item.name === relationName);
+  if (!relation) {
+    throw new Error(`Unknown relation ${relationName} on model ${metadata.name}`);
+  }
+
+  if (relation.kind !== "belongsTo" && relation.kind !== "hasMany") {
+    throw new Error(`Relation ${relationName} on model ${metadata.name} is not supported by the ORM yet`);
+  }
+
+  const targetMetadata = getModelMetadata(relation.target());
+
+  if (relation.kind === "belongsTo") {
+    return {
+      relationName,
+      kind: relation.kind,
+      sourceMetadata: metadata,
+      targetMetadata,
+      sourceField: fieldMetadata(metadata, relation.foreignKey),
+      targetField: fieldMetadata(targetMetadata, relation.targetKey)
+    };
+  }
+
+  return {
+    relationName,
+    kind: relation.kind,
+    sourceMetadata: metadata,
+    targetMetadata,
+    sourceField: fieldMetadata(metadata, relation.localKey),
+    targetField: fieldMetadata(targetMetadata, relation.foreignKey)
+  };
+}
+
+function normalizeOperator(operator: QueryOperator): string {
+  return operator === "like" ? "LIKE" : operator;
+}
+
+function readEntityValue(entity: object, key: string): unknown {
+  return (entity as Record<string, unknown>)[key];
+}
+
+function assignRelation(entity: object, relationName: string, value: unknown): void {
+  (entity as Record<string, unknown>)[relationName] = value;
 }
 
 function resolveSqliteFilename(databaseUrl: string): string {
