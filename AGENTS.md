@@ -20,6 +20,7 @@
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared ORM/repository helpers instead of reimplementing it inline.
 - Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/edge`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
 - npm release preparation should go through `pnpm version:workspace <version>` committed to `main`, then the manual `Release npm Packages` GitHub Actions workflow.
+- Keep the release workflow on Node 22 to match the validated CI/runtime baseline unless the workspace Node version is intentionally raised everywhere.
 - The release workflow packages the Intel macOS proxy binary on GitHub-hosted `macos-15-intel`; keep release runner labels aligned with currently supported GitHub-hosted images.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
 
