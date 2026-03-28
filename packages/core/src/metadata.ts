@@ -14,7 +14,7 @@ import type {
   ModelMetadata,
   RelationMetadata,
   ValidationIssue
-} from "./types";
+} from "./types.js";
 
 const registry = new Map<Function, ModelMetadata>();
 type PendingRelation =

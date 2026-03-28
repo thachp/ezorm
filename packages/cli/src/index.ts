@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { executeCliCommand } from "./workflow";
+import { executeCliCommand } from "./workflow.js";
 
 export interface EzormCliConfig {
   databaseUrl: string;

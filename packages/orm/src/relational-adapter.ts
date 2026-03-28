@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import type { TableSchema } from "./schema";
+import type { TableSchema } from "./schema.js";
 
 export type SqlDialect = "sqlite" | "postgres" | "mysql" | "mssql";
 type AdapterParameter = string | number | bigint | Uint8Array | boolean | null;

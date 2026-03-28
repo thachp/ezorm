@@ -3,7 +3,7 @@ import {
   type FieldMetadata,
   type ModelMetadata
 } from "@ezorm/core";
-import type { SqlDialect } from "./relational-adapter";
+import type { SqlDialect } from "./relational-adapter.js";
 
 export interface TableIndexSchema {
   name: string;

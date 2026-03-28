@@ -6,4 +6,3 @@ target
 .artifacts
 .DS_Store
 *.tgz
-pnpm-lock.yaml

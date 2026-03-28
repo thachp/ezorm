@@ -11,7 +11,7 @@ import {
   type SqlDialect,
   type TableSchema
 } from "@ezorm/orm";
-import type { CliCommand, EzormCliConfig } from "./index";
+import type { CliCommand, EzormCliConfig } from "./index.js";
 
 const CONFIG_FILENAMES = ["ezorm.config.mjs", "ezorm.config.js", "ezorm.config.cjs"] as const;
 const MIGRATION_HISTORY_TABLE = "_ezorm_migrations";

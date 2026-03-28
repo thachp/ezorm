@@ -13,7 +13,7 @@ import type {
   QueryBuilder,
   Repository,
   TableSchema
-} from "./index";
+} from "./index.js";
 
 type SqlScalar = string | number | boolean | null;
 type SortDirection = "asc" | "desc";

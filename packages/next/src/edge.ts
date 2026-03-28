@@ -1,5 +1,5 @@
 import { ProxyOrmClient, type ProxyOrmClientOptions } from "@ezorm/runtime-proxy";
-import { assertEdgeSafeImport } from "./index";
+import { assertEdgeSafeImport } from "./index.js";
 
 export function createNextEdgeClient(options: ProxyOrmClientOptions): ProxyOrmClient {
   return new ProxyOrmClient(options);

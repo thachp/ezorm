@@ -1,6 +1,6 @@
 /// <reference path="./vendor-modules.d.ts" />
 
-export * from "./direct-orm";
-export * from "./runtime-client";
-export * from "./relational-adapter";
-export * from "./schema";
+export * from "./direct-orm.js";
+export * from "./runtime-client.js";
+export * from "./relational-adapter.js";
+export * from "./schema.js";

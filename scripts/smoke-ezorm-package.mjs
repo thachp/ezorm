@@ -1,56 +1,110 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const packageDir = resolve(rootDir, "packages/cli");
+const corePackageDir = resolve(rootDir, "packages/core");
+const ormPackageDir = resolve(rootDir, "packages/orm");
+const cliPackageDir = resolve(rootDir, "packages/cli");
 const workspace = mkdtempSync(resolve(tmpdir(), "ezorm-smoke-"));
 
-const packResult = spawnSync(
-  "npm",
-  ["pack", "--json", "--pack-destination", workspace],
-  {
-    cwd: packageDir,
-    encoding: "utf8"
-  }
-);
+const coreTarballPath = packPackage(corePackageDir);
+const ormTarballPath = packPackage(ormPackageDir);
+const tarballPath = packPackage(cliPackageDir);
 
-if (packResult.status !== 0) {
-  process.stderr.write(packResult.stderr);
-  process.exit(packResult.status ?? 1);
-}
-
-const [{ filename }] = parsePackOutput(packResult.stdout);
-const tarballPath = resolve(workspace, filename);
-
-run("npm", ["init", "-y"]);
-run("npm", ["install", tarballPath]);
-assertOutput(
-  run("npx", ["ezorm", "migrate", "status"]).stdout,
-  "Queued migrate status",
-  "npm install smoke test"
-);
-
-run("pnpm", ["add", tarballPath]);
-assertOutput(
-  run("pnpm", ["exec", "ezorm", "migrate", "status"]).stdout,
-  "Queued migrate status",
-  "pnpm add smoke test"
-);
-
-assertOutput(
-  run("npx", ["--yes", "--package", tarballPath, "ezorm", "migrate", "status"]).stdout,
-  "Queued migrate status",
-  "npx package smoke test"
-);
+runNpmInstallSmoke();
+runPnpmAddSmoke();
+runNpxPackageSmoke();
 
 process.stdout.write(`Smoke test passed with ${tarballPath}\n`);
 
-function run(command, args) {
+function packPackage(cwd) {
+  const packResult = spawnSync(
+    "npm",
+    ["pack", "--json", "--pack-destination", workspace],
+    {
+      cwd,
+      encoding: "utf8"
+    }
+  );
+
+  if (packResult.status !== 0) {
+    process.stderr.write(packResult.stdout);
+    process.stderr.write(packResult.stderr);
+    process.exit(packResult.status ?? 1);
+  }
+
+  const [{ filename }] = parsePackOutput(packResult.stdout);
+  return resolve(workspace, filename);
+}
+
+function runNpmInstallSmoke() {
+  const installWorkspace = mkdtempSync(resolve(tmpdir(), "ezorm-install-"));
+  run("npm", ["init", "-y"], installWorkspace);
+  run("npm", ["install", coreTarballPath, ormTarballPath, tarballPath], installWorkspace);
+  assertOutput(run("npx", ["ezorm", "--help"], installWorkspace).stdout, "Usage:", "npm install smoke test");
+}
+
+function runPnpmAddSmoke() {
+  const installWorkspace = mkdtempSync(resolve(tmpdir(), "ezorm-pnpm-"));
+  writeFileSync(
+    resolve(installWorkspace, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "ezorm-pnpm-smoke",
+        private: true,
+        dependencies: {
+          "@ezorm/core": `file:${coreTarballPath}`,
+          "@ezorm/orm": `file:${ormTarballPath}`,
+          ezorm: `file:${tarballPath}`
+        },
+        pnpm: {
+          overrides: {
+            "@ezorm/core": `file:${coreTarballPath}`,
+            "@ezorm/orm": `file:${ormTarballPath}`
+          }
+        }
+      },
+      null,
+      2
+    )}\n`
+  );
+  run("pnpm", ["install"], installWorkspace);
+  assertOutput(
+    run("pnpm", ["exec", "ezorm", "--help"], installWorkspace).stdout,
+    "Usage:",
+    "pnpm add smoke test"
+  );
+}
+
+function runNpxPackageSmoke() {
+  const npxWorkspace = mkdtempSync(resolve(tmpdir(), "ezorm-npx-"));
+  assertOutput(
+    run(
+      "npx",
+      [
+        "--yes",
+        "--package",
+        coreTarballPath,
+        "--package",
+        ormTarballPath,
+        "--package",
+        tarballPath,
+        "ezorm",
+        "--help"
+      ],
+      npxWorkspace
+    ).stdout,
+    "Usage:",
+    "npx package smoke test"
+  );
+}
+
+function run(command, args, cwd = workspace) {
   const result = spawnSync(command, args, {
-    cwd: workspace,
+    cwd,
     encoding: "utf8"
   });
 

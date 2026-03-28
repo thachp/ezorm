@@ -10,12 +10,12 @@ import {
 import {
   createSchemaStatementsForModels,
   type TableSchema
-} from "./schema";
+} from "./schema.js";
 import {
   connectRelationalAdapter,
   type RelationalAdapter,
   type SqlDialect
-} from "./relational-adapter";
+} from "./relational-adapter.js";
 
 type SqlScalar = string | number | boolean | null;
 type DatabaseValue = string | number | boolean | null;
