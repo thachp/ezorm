@@ -5,8 +5,8 @@ import {
   type BelongsToRelationMetadata,
   type FieldMetadata,
   type HasManyRelationMetadata,
-  type ModelMetadata,
-  type RelationMetadata
+  type ManyToManyRelationMetadata,
+  type ModelMetadata
 } from "@ezorm/core";
 
 type SqlScalar = string | number | boolean | null;
@@ -14,7 +14,10 @@ type DatabaseValue = string | number | null;
 type QueryOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "like";
 type SortDirection = "asc" | "desc";
 type JoinType = "inner" | "left";
-type SupportedRelationMetadata = BelongsToRelationMetadata | HasManyRelationMetadata;
+type SupportedRelationMetadata =
+  | BelongsToRelationMetadata
+  | HasManyRelationMetadata
+  | ManyToManyRelationMetadata;
 
 export interface OrmClientOptions {
   databaseUrl: string;
@@ -82,7 +85,7 @@ interface SqliteOrmContext {
   loadMany<T extends object>(model: ModelClass<T>, entities: T[], relationName: string): Promise<T[]>;
 }
 
-interface RelationPlan {
+interface BaseRelationPlan {
   relationName: string;
   kind: SupportedRelationMetadata["kind"];
   sourceMetadata: ModelMetadata;
@@ -91,8 +94,22 @@ interface RelationPlan {
   targetField: FieldMetadata;
 }
 
+interface DirectRelationPlan extends BaseRelationPlan {
+  kind: "belongsTo" | "hasMany";
+}
+
+interface ManyToManyRelationPlan extends BaseRelationPlan {
+  kind: "manyToMany";
+  throughTable: string;
+  throughSourceKey: string;
+  throughTargetKey: string;
+}
+
+type RelationPlan = DirectRelationPlan | ManyToManyRelationPlan;
+
 interface JoinedRelation {
   alias: string;
+  throughAlias?: string;
   joinType: JoinType;
   plan: RelationPlan;
 }
@@ -108,6 +125,8 @@ interface QueryOrder {
   direction: SortDirection;
 }
 
+const MANY_TO_MANY_SOURCE_KEY_ALIAS = "__ezorm_source_key";
+
 export async function createOrmClient(options: OrmClientOptions): Promise<OrmClient> {
   const database = new DatabaseSync(resolveSqliteFilename(options.databaseUrl));
   const ensuredTables = new Set<string>();
@@ -118,8 +137,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
       return;
     }
 
-    database.exec(createTableStatement(metadata));
-    for (const statement of createIndexStatements(metadata)) {
+    for (const statement of createSchemaStatements(metadata)) {
       database.exec(statement);
     }
     ensuredTables.add(metadata.table);
@@ -151,58 +169,101 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
     if (sourceValues.length === 0) {
       for (const entity of entities) {
-        assignRelation(entity, relationName, plan.kind === "hasMany" ? [] : undefined);
+        assignRelation(entity, relationName, relationDefaults(plan.kind));
       }
       return entities;
     }
 
     const uniqueValues = [...new Map(sourceValues.map((value) => [String(value), value])).values()];
     const placeholders = uniqueValues.map(() => "?").join(", ");
-    const rows = database
-      .prepare(
-        `SELECT * FROM ${quoteIdentifier(plan.targetMetadata.table)} WHERE ${quoteIdentifier(
-          plan.targetField.name
-        )} IN (${placeholders})`
-      )
-      .all(...uniqueValues.map((value) => toDatabaseValue(plan.targetField, value))) as Array<
-      Record<string, unknown>
-    >;
-    const mappedRows = rows.map((row) => mapRow(plan.targetMetadata, row));
 
-    if (plan.kind === "belongsTo") {
-      const byTargetKey = new Map(
-        mappedRows.map((row) => [String(row[plan.targetField.name]), row])
-      );
+    if (plan.kind === "belongsTo" || plan.kind === "hasMany") {
+      const rows = database
+        .prepare(
+          `SELECT * FROM ${quoteIdentifier(plan.targetMetadata.table)} WHERE ${quoteIdentifier(
+            plan.targetField.name
+          )} IN (${placeholders})`
+        )
+        .all(...uniqueValues.map((value) => toDatabaseValue(plan.targetField, value))) as Array<
+        Record<string, unknown>
+      >;
+      const mappedRows = rows.map((row) => mapRow(plan.targetMetadata, row));
+
+      if (plan.kind === "belongsTo") {
+        const byTargetKey = new Map(
+          mappedRows.map((row) => [String(row[plan.targetField.name]), row])
+        );
+        for (const entity of entities) {
+          const sourceValue = readEntityValue(entity, plan.sourceField.name);
+          assignRelation(
+            entity,
+            relationName,
+            sourceValue === undefined || sourceValue === null
+              ? undefined
+              : byTargetKey.get(String(sourceValue))
+          );
+        }
+        return entities;
+      }
+
+      const byForeignKey = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of mappedRows) {
+        const key = String(row[plan.targetField.name]);
+        const current = byForeignKey.get(key) ?? [];
+        current.push(row);
+        byForeignKey.set(key, current);
+      }
       for (const entity of entities) {
         const sourceValue = readEntityValue(entity, plan.sourceField.name);
         assignRelation(
           entity,
           relationName,
           sourceValue === undefined || sourceValue === null
-            ? undefined
-            : byTargetKey.get(String(sourceValue))
+            ? []
+            : (byForeignKey.get(String(sourceValue)) ?? [])
         );
       }
       return entities;
     }
 
-    const byForeignKey = new Map<string, Array<Record<string, unknown>>>();
-    for (const row of mappedRows) {
-      const key = String(row[plan.targetField.name]);
-      const current = byForeignKey.get(key) ?? [];
-      current.push(row);
-      byForeignKey.set(key, current);
+    if (plan.kind !== "manyToMany") {
+      throw new Error(`Expected many-to-many relation plan for ${relationName}`);
     }
+
+    const manyToManyPlan = plan;
+    const manyToManyRows = database
+      .prepare(
+        `SELECT t.*, jt.${quoteIdentifier(manyToManyPlan.throughSourceKey)} AS ${quoteIdentifier(
+          MANY_TO_MANY_SOURCE_KEY_ALIAS
+        )} FROM ${quoteIdentifier(manyToManyPlan.throughTable)} jt JOIN ${quoteIdentifier(
+          manyToManyPlan.targetMetadata.table
+        )} t ON jt.${quoteIdentifier(manyToManyPlan.throughTargetKey)} = t.${quoteIdentifier(
+          manyToManyPlan.targetField.name
+        )} WHERE jt.${quoteIdentifier(manyToManyPlan.throughSourceKey)} IN (${placeholders})`
+      )
+      .all(...uniqueValues.map((value) => toDatabaseValue(manyToManyPlan.sourceField, value))) as Array<
+      Record<string, unknown>
+    >;
+
+    const grouped = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of manyToManyRows) {
+      const sourceKey = String(row[MANY_TO_MANY_SOURCE_KEY_ALIAS]);
+      const current = grouped.get(sourceKey) ?? [];
+      current.push(mapRow(manyToManyPlan.targetMetadata, row));
+      grouped.set(sourceKey, current);
+    }
+
     for (const entity of entities) {
-      const sourceValue = readEntityValue(entity, plan.sourceField.name);
+      const sourceValue = readEntityValue(entity, manyToManyPlan.sourceField.name);
       assignRelation(
         entity,
         relationName,
         sourceValue === undefined || sourceValue === null
           ? []
-          : (byForeignKey.get(String(sourceValue)) ?? [])
+          : (grouped.get(String(sourceValue)) ?? [])
       );
     }
+
     return entities;
   }
 
@@ -239,9 +300,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
 
         async findById(id) {
           await ensureTable(model);
-          return createQueryBuilder(context, model)
-            .where(primaryKey.name, "=", id)
-            .first();
+          return createQueryBuilder(context, model).where(primaryKey.name, "=", id).first();
         },
 
         async findMany(options = {}) {
@@ -315,10 +374,9 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
     loadMany,
 
     async pushSchema(models) {
-      const statements = models.flatMap((model) => {
-        const metadata = getModelMetadata(model);
-        return [createTableStatement(metadata), ...createIndexStatements(metadata)];
-      });
+      const statements = uniqueStatements(
+        models.flatMap((model) => createSchemaStatements(getModelMetadata(model)))
+      );
 
       for (const model of models) {
         await ensureTable(model);
@@ -436,8 +494,10 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     }
 
     const plan = resolveRelationPlan(this.metadata, relationName);
+    const index = this.joins.size + 1;
     this.joins.set(relationName, {
-      alias: `j${this.joins.size + 1}`,
+      alias: `j${index}`,
+      throughAlias: plan.kind === "manyToMany" ? `j${index}_through` : undefined,
       joinType,
       plan
     });
@@ -454,15 +514,11 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
     }
 
     const params: DatabaseValue[] = [];
+    const hasManyToManyJoin = [...this.joins.values()].some(
+      (joinedRelation) => joinedRelation.plan.kind === "manyToMany"
+    );
     const joinSql = [...this.joins.values()]
-      .map((joinedRelation) => {
-        const relationAlias = joinedRelation.alias;
-        const sourceReference = `t0.${quoteIdentifier(joinedRelation.plan.sourceField.name)}`;
-        const targetReference = `${relationAlias}.${quoteIdentifier(joinedRelation.plan.targetField.name)}`;
-        return `${joinedRelation.joinType === "left" ? "LEFT JOIN" : "JOIN"} ${quoteIdentifier(
-          joinedRelation.plan.targetMetadata.table
-        )} ${relationAlias} ON ${sourceReference} = ${targetReference}`;
-      })
+      .map((joinedRelation) => renderJoinSql(joinedRelation))
       .join(" ");
 
     const whereSql = this.conditions
@@ -489,7 +545,9 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
         : ` LIMIT ${effectiveLimit}`;
     const offsetSql = this.rowOffset === undefined ? "" : ` OFFSET ${this.rowOffset}`;
     const sql = [
-      `SELECT t0.* FROM ${quoteIdentifier(this.metadata.table)} t0`,
+      `${hasManyToManyJoin ? "SELECT DISTINCT" : "SELECT"} t0.* FROM ${quoteIdentifier(
+        this.metadata.table
+      )} t0`,
       joinSql ? ` ${joinSql}` : "",
       whereSql ? ` WHERE ${whereSql}` : "",
       orderSql ? ` ORDER BY ${orderSql}` : "",
@@ -528,13 +586,41 @@ class SqliteQueryBuilder<T extends object> implements QueryBuilder<T> {
   }
 }
 
+function renderJoinSql(joinedRelation: JoinedRelation): string {
+  const targetAlias = joinedRelation.alias;
+  const joinKeyword = joinedRelation.joinType === "left" ? "LEFT JOIN" : "JOIN";
+
+  if (joinedRelation.plan.kind === "manyToMany") {
+    const throughAlias = joinedRelation.throughAlias;
+    if (!throughAlias) {
+      throw new Error(`Many-to-many relation ${joinedRelation.plan.relationName} is missing a through alias`);
+    }
+    return [
+      `${joinKeyword} ${quoteIdentifier(joinedRelation.plan.throughTable)} ${throughAlias} ON t0.${quoteIdentifier(
+        joinedRelation.plan.sourceField.name
+      )} = ${throughAlias}.${quoteIdentifier(joinedRelation.plan.throughSourceKey)}`,
+      `${joinKeyword} ${quoteIdentifier(joinedRelation.plan.targetMetadata.table)} ${targetAlias} ON ${throughAlias}.${quoteIdentifier(
+        joinedRelation.plan.throughTargetKey
+      )} = ${targetAlias}.${quoteIdentifier(joinedRelation.plan.targetField.name)}`
+    ].join(" ");
+  }
+
+  return `${joinKeyword} ${quoteIdentifier(joinedRelation.plan.targetMetadata.table)} ${targetAlias} ON t0.${quoteIdentifier(
+    joinedRelation.plan.sourceField.name
+  )} = ${targetAlias}.${quoteIdentifier(joinedRelation.plan.targetField.name)}`;
+}
+
 function resolveRelationPlan(metadata: ModelMetadata, relationName: string): RelationPlan {
   const relation = metadata.relations.find((item) => item.name === relationName);
   if (!relation) {
     throw new Error(`Unknown relation ${relationName} on model ${metadata.name}`);
   }
 
-  if (relation.kind !== "belongsTo" && relation.kind !== "hasMany") {
+  if (
+    relation.kind !== "belongsTo" &&
+    relation.kind !== "hasMany" &&
+    relation.kind !== "manyToMany"
+  ) {
     throw new Error(`Relation ${relationName} on model ${metadata.name} is not supported by the ORM yet`);
   }
 
@@ -551,14 +637,68 @@ function resolveRelationPlan(metadata: ModelMetadata, relationName: string): Rel
     };
   }
 
+  if (relation.kind === "hasMany") {
+    return {
+      relationName,
+      kind: relation.kind,
+      sourceMetadata: metadata,
+      targetMetadata,
+      sourceField: fieldMetadata(metadata, relation.localKey),
+      targetField: fieldMetadata(targetMetadata, relation.foreignKey)
+    };
+  }
+
   return {
     relationName,
     kind: relation.kind,
     sourceMetadata: metadata,
     targetMetadata,
-    sourceField: fieldMetadata(metadata, relation.localKey),
-    targetField: fieldMetadata(targetMetadata, relation.foreignKey)
+    sourceField: fieldMetadata(metadata, relation.sourceKey),
+    targetField: fieldMetadata(targetMetadata, relation.targetKey),
+    throughTable: relation.throughTable,
+    throughSourceKey: relation.throughSourceKey,
+    throughTargetKey: relation.throughTargetKey
   };
+}
+
+function relationDefaults(kind: RelationPlan["kind"]): unknown {
+  return kind === "belongsTo" ? undefined : [];
+}
+
+function createSchemaStatements(metadata: ModelMetadata): string[] {
+  return uniqueStatements([
+    createTableStatement(metadata),
+    ...createIndexStatements(metadata),
+    ...createManyToManyStatements(metadata)
+  ]);
+}
+
+function createManyToManyStatements(metadata: ModelMetadata): string[] {
+  return metadata.relations.flatMap((relation) => {
+    if (relation.kind !== "manyToMany") {
+      return [];
+    }
+
+    const targetMetadata = getModelMetadata(relation.target());
+    const sourceField = fieldMetadata(metadata, relation.sourceKey);
+    const targetField = fieldMetadata(targetMetadata, relation.targetKey);
+    const uniqueIndexName = `${relation.throughTable}_${relation.throughSourceKey}_${relation.throughTargetKey}_unique`;
+
+    return [
+      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(relation.throughTable)} (${quoteIdentifier(
+        relation.throughSourceKey
+      )} ${sqlTypeForField(sourceField)} NOT NULL, ${quoteIdentifier(
+        relation.throughTargetKey
+      )} ${sqlTypeForField(targetField)} NOT NULL)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdentifier(uniqueIndexName)} ON ${quoteIdentifier(
+        relation.throughTable
+      )} (${quoteIdentifier(relation.throughSourceKey)}, ${quoteIdentifier(relation.throughTargetKey)})`
+    ];
+  });
+}
+
+function uniqueStatements(statements: string[]): string[] {
+  return [...new Set(statements)];
 }
 
 function normalizeOperator(operator: QueryOperator): string {

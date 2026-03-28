@@ -4,6 +4,7 @@ import {
   Field,
   HasMany,
   Index,
+  ManyToMany,
   Model,
   PrimaryKey,
   Unique,
@@ -78,6 +79,69 @@ describe("@ezorm/core", () => {
     }
 
     expect(() => getModelMetadata(Comment)).toThrow("Unknown field authorId on model Comment");
+  });
+
+  it("stores many-to-many metadata with explicit through-table keys", () => {
+    @Model({ table: "posts" })
+    class Post {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @ManyToMany(() => Tag, {
+        throughTable: "post_tags",
+        sourceKey: "id",
+        throughSourceKey: "post_id",
+        targetKey: "id",
+        throughTargetKey: "tag_id"
+      })
+      tags!: unknown[];
+    }
+
+    @Model({ table: "tags" })
+    class Tag {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    const metadata = getModelMetadata(Post);
+    expect(metadata.relations[0]).toMatchObject({
+      kind: "manyToMany",
+      name: "tags",
+      throughTable: "post_tags",
+      sourceKey: "id",
+      throughSourceKey: "post_id",
+      targetKey: "id",
+      throughTargetKey: "tag_id"
+    });
+  });
+
+  it("fails fast when many-to-many keys point at unknown fields", () => {
+    @Model()
+    class Tag {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    @Model()
+    class Post {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @ManyToMany(() => Tag, {
+        throughTable: "post_tags",
+        sourceKey: "postId",
+        throughSourceKey: "post_id",
+        targetKey: "id",
+        throughTargetKey: "tag_id"
+      })
+      tags!: unknown[];
+    }
+
+    expect(() => getModelMetadata(Post)).toThrow("Unknown field postId on model Post");
   });
 
   it("validates DTO input using field definitions", () => {

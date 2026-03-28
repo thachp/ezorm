@@ -7,6 +7,7 @@ import type {
   HasOneRelationMetadata,
   HasManyOptions,
   IndexMetadata,
+  ManyToManyOptions,
   ManyToManyRelationMetadata,
   ModelOptions,
   ModelKind,
@@ -157,8 +158,20 @@ export function BelongsTo(targetModel: () => Function, options: BelongsToOptions
     });
 }
 
-export function ManyToMany(targetModel: () => Function): PropertyDecorator {
-  return (target, propertyKey) => addRelation(target, propertyKey, { kind: "manyToMany", target: targetModel });
+export function ManyToMany(
+  targetModel: () => Function,
+  options: ManyToManyOptions
+): PropertyDecorator {
+  return (target, propertyKey) =>
+    addRelation(target, propertyKey, {
+      kind: "manyToMany",
+      target: targetModel,
+      throughTable: options.throughTable,
+      sourceKey: options.sourceKey,
+      throughSourceKey: options.throughSourceKey,
+      targetKey: options.targetKey,
+      throughTargetKey: options.throughTargetKey
+    });
 }
 
 export function getModelMetadata(target: Function): ModelMetadata {
@@ -252,6 +265,16 @@ function validateModelMetadata(metadata: ModelMetadata, visited = new Set<Functi
         validateModelMetadata(targetMetadata, visited);
         break;
       }
+      case "manyToMany": {
+        fieldMetadata(metadata, relation.sourceKey);
+        const targetMetadata = ensureModel(relation.target());
+        fieldMetadata(targetMetadata, relation.targetKey);
+        requireIdentifier(relation.throughTable, "through table");
+        requireIdentifier(relation.throughSourceKey, "through source key");
+        requireIdentifier(relation.throughTargetKey, "through target key");
+        validateModelMetadata(targetMetadata, visited);
+        break;
+      }
       default:
         validateModelMetadata(ensureModel(relation.target()), visited);
     }
@@ -271,4 +294,10 @@ function defaultTableName(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/\s+/g, "_")
     .toLowerCase();
+}
+
+function requireIdentifier(value: string, label: string): void {
+  if (!value.trim()) {
+    throw new Error(`Relation ${label} is required`);
+  }
 }

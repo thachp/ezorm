@@ -222,11 +222,57 @@ await client.load(Post, posts[0], "author");
 
 Current relation support is intentionally narrow:
 
-- `BelongsTo` and `HasMany` only
+- `BelongsTo`, `HasMany`, and `ManyToMany`
 - explicit key mappings are required
 - `client.query(Model)` is read-only
 - `include(...)`, `load(...)`, and `loadMany(...)` are explicit async APIs
-- no many-to-many, no implicit property lazy loading, and no custom `select()` builder yet
+- no implicit property lazy loading and no custom `select()` builder yet
+
+Many-to-many relations use an explicit join table and remain read-oriented in v1:
+
+```ts
+import { Field, ManyToMany, Model, PrimaryKey } from "@ezorm/core";
+
+@Model({ table: "posts" })
+class Post {
+  @PrimaryKey()
+  @Field.string()
+  id!: string;
+
+  @Field.string()
+  title!: string;
+
+  @ManyToMany(() => Tag, {
+    throughTable: "post_tags",
+    sourceKey: "id",
+    throughSourceKey: "post_id",
+    targetKey: "id",
+    throughTargetKey: "tag_id"
+  })
+  tags!: Tag[];
+}
+
+@Model({ table: "tags" })
+class Tag {
+  @PrimaryKey()
+  @Field.string()
+  id!: string;
+
+  @Field.string()
+  label!: string;
+}
+
+await client.pushSchema([Post, Tag]);
+
+const postsWithOrmTag = await client
+  .query(Post)
+  .join("tags")
+  .where("tags.label", "=", "orm")
+  .include("tags")
+  .all();
+
+await client.load(Post, postsWithOrmTag[0], "tags");
+```
 
 ## CLI Workflows Available Today
 

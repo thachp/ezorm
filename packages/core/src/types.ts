@@ -32,6 +32,14 @@ export interface HasManyOptions {
   foreignKey: string;
 }
 
+export interface ManyToManyOptions {
+  throughTable: string;
+  sourceKey: string;
+  throughSourceKey: string;
+  targetKey: string;
+  throughTargetKey: string;
+}
+
 export interface HasOneRelationMetadata {
   kind: "hasOne";
   name: string;
@@ -42,6 +50,11 @@ export interface ManyToManyRelationMetadata {
   kind: "manyToMany";
   name: string;
   target: () => Function;
+  throughTable: string;
+  sourceKey: string;
+  throughSourceKey: string;
+  targetKey: string;
+  throughTargetKey: string;
 }
 
 export interface BelongsToRelationMetadata {
