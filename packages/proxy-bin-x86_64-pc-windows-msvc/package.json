@@ -1,6 +1,6 @@
 {
   "name": "@ezorm/proxy-bin-x86_64-pc-windows-msvc",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Prebuilt ezorm_proxy binary for x86_64-pc-windows-msvc.",
   "license": "MIT",
   "repository": {

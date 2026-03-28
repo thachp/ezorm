@@ -1,6 +1,6 @@
 {
   "name": "@ezorm/runtime-proxy",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "HTTP proxy-backed ORM client for Ezorm pooled runtimes.",
   "license": "MIT",
   "repository": {
@@ -26,8 +26,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@ezorm/core": "1.1.0",
-    "@ezorm/orm": "1.1.0"
+    "@ezorm/core": "1.1.1",
+    "@ezorm/orm": "1.1.1"
   },
   "scripts": {
     "build": "tsc -p ./tsconfig.build.json",

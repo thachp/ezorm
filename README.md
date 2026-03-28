@@ -154,6 +154,49 @@ The repository API is intentionally small in v1:
 
 `findMany(...)` supports exact-match scalar filters and simple ordering for single-table CRUD.
 
+## Enable Repository Read Cache
+
+`readCache` is opt-in on the direct ORM path. Use it when you want cached repository reads for `findById(...)` and `findMany(...)`.
+
+```ts
+import { createOrmClient } from "@ezorm/orm";
+
+const client = await createOrmClient({
+  databaseUrl: "sqlite::memory:",
+  readCache: {
+    default: {
+      backend: "memory",
+      ttlSeconds: 30
+    }
+  }
+});
+```
+
+The same cache configuration is available through `@ezorm/runtime-node`:
+
+```ts
+import { createNodeRuntime } from "@ezorm/runtime-node";
+
+const client = await createNodeRuntime({
+  connect: {
+    databaseUrl: "sqlite::memory:",
+    readCache: {
+      default: {
+        backend: "memory",
+        ttlSeconds: 30
+      }
+    }
+  }
+});
+```
+
+Current cache behavior:
+
+- `readCache` is opt-in.
+- It applies only to `repository.findById(...)` and `repository.findMany(...)`.
+- TTL is absolute from write time.
+- `create`, `update`, and `delete` clear that model's cached repository entries.
+
 ## Manage Schema With The CLI
 
 The `ezorm` CLI uses a project-level config file named one of:

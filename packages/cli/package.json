@@ -1,6 +1,6 @@
 {
   "name": "ezorm",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Ezorm CLI for migrations and database workflows.",
   "license": "MIT",
   "repository": {
@@ -30,8 +30,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@ezorm/core": "1.1.0",
-    "@ezorm/orm": "1.1.0",
+    "@ezorm/core": "1.1.1",
+    "@ezorm/orm": "1.1.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
