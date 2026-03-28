@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { BelongsTo, Field, HasMany, ManyToMany, Model, PrimaryKey } from "@ezorm/core";
-import { createOrmClient, type QueryBuilder } from "./index";
+import { createOrmClient, type OrmClientOptions, type QueryBuilder } from "./index";
 
 let tempDirectory: string | undefined;
 
@@ -67,6 +67,298 @@ describe("@ezorm/orm", () => {
 
     await repository.delete("todo-2");
     await expect(repository.findById("todo-2")).resolves.toBeUndefined();
+  });
+
+  it("caches repository reads until the ttl expires", async () => {
+    @Model({ table: "todos" })
+    class Todo {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      title!: string;
+    }
+
+    client = await createTempSqliteClient({
+      readCache: {
+        default: {
+          backend: "memory",
+          ttlSeconds: 1
+        }
+      }
+    });
+    const repository = client.repository(Todo);
+
+    await client.pushSchema([Todo]);
+    await repository.create({ id: "todo-1", title: "Cached title" });
+
+    await expect(repository.findById("todo-1")).resolves.toEqual({
+      id: "todo-1",
+      title: "Cached title"
+    });
+
+    updateSqlite(
+      join(requireTempDirectory(), "test.sqlite"),
+      'UPDATE "todos" SET "title" = ? WHERE "id" = ?',
+      ["Fresh title", "todo-1"]
+    );
+
+    await expect(repository.findById("todo-1")).resolves.toEqual({
+      id: "todo-1",
+      title: "Cached title"
+    });
+
+    await waitFor(1_100);
+
+    await expect(repository.findById("todo-1")).resolves.toEqual({
+      id: "todo-1",
+      title: "Fresh title"
+    });
+  });
+
+  it("invalidates cached repository reads on writes", async () => {
+    @Model({ table: "todos" })
+    class Todo {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      title!: string;
+    }
+
+    client = await createTempSqliteClient({
+      readCache: {
+        default: {
+          backend: "memory",
+          ttlSeconds: 60
+        }
+      }
+    });
+    const repository = client.repository(Todo);
+
+    await client.pushSchema([Todo]);
+    await repository.create({ id: "todo-1", title: "Initial title" });
+    await expect(repository.findMany({ orderBy: { field: "title", direction: "asc" } })).resolves.toEqual([
+      { id: "todo-1", title: "Initial title" }
+    ]);
+
+    await expect(repository.update("todo-1", { title: "Updated title" })).resolves.toEqual({
+      id: "todo-1",
+      title: "Updated title"
+    });
+
+    await expect(repository.findMany({ orderBy: { field: "title", direction: "asc" } })).resolves.toEqual([
+      { id: "todo-1", title: "Updated title" }
+    ]);
+
+    await repository.delete("todo-1");
+    await expect(repository.findById("todo-1")).resolves.toBeUndefined();
+  });
+
+  it("allows a model to disable caching even when a global cache default is enabled", async () => {
+    @Model({
+      table: "sessions",
+      cache: {
+        backend: false
+      }
+    })
+    class Session {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      token!: string;
+    }
+
+    client = await createTempSqliteClient({
+      readCache: {
+        default: {
+          backend: "memory",
+          ttlSeconds: 60
+        }
+      }
+    });
+    const repository = client.repository(Session);
+
+    await client.pushSchema([Session]);
+    await repository.create({ id: "session-1", token: "alpha" });
+    await expect(repository.findById("session-1")).resolves.toEqual({
+      id: "session-1",
+      token: "alpha"
+    });
+
+    updateSqlite(
+      join(requireTempDirectory(), "test.sqlite"),
+      'UPDATE "sessions" SET "token" = ? WHERE "id" = ?',
+      ["beta", "session-1"]
+    );
+
+    await expect(repository.findById("session-1")).resolves.toEqual({
+      id: "session-1",
+      token: "beta"
+    });
+  });
+
+  it("applies by-model cache overrides when the model inherits the client default", async () => {
+    @Model({ table: "audit_logs" })
+    class AuditLog {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      message!: string;
+    }
+
+    client = await createTempSqliteClient({
+      readCache: {
+        default: {
+          backend: "memory",
+          ttlSeconds: 60
+        },
+        byModel: {
+          AuditLog: {
+            backend: false
+          }
+        }
+      }
+    });
+    const repository = client.repository(AuditLog);
+
+    await client.pushSchema([AuditLog]);
+    await repository.create({ id: "log-1", message: "alpha" });
+    await expect(repository.findById("log-1")).resolves.toEqual({
+      id: "log-1",
+      message: "alpha"
+    });
+
+    updateSqlite(
+      join(requireTempDirectory(), "test.sqlite"),
+      'UPDATE "audit_logs" SET "message" = ? WHERE "id" = ?',
+      ["beta", "log-1"]
+    );
+
+    await expect(repository.findById("log-1")).resolves.toEqual({
+      id: "log-1",
+      message: "beta"
+    });
+  });
+
+  it("persists file-backed cache entries across clients", async () => {
+    @Model({
+      table: "audit_logs",
+      cache: {
+        backend: "file",
+        ttlSeconds: 60
+      }
+    })
+    class AuditLog {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      message!: string;
+    }
+
+    const directory = await mkdtemp(join(tmpdir(), "ezorm-file-cache-"));
+    tempDirectory = directory;
+    const databaseUrl = `sqlite://${join(directory, "test.sqlite")}`;
+    const readCache = {
+      default: {
+        backend: "memory" as const,
+        ttlSeconds: 60
+      },
+      dir: join(directory, "cache")
+    };
+
+    client = await createOrmClient({ databaseUrl, readCache });
+    let repository = client.repository(AuditLog);
+
+    await client.pushSchema([AuditLog]);
+    await repository.create({ id: "log-1", message: "cached message" });
+    await expect(repository.findById("log-1")).resolves.toEqual({
+      id: "log-1",
+      message: "cached message"
+    });
+    await client.close();
+    client = undefined;
+
+    updateSqlite(join(directory, "test.sqlite"), 'UPDATE "audit_logs" SET "message" = ? WHERE "id" = ?', [
+      "fresh message",
+      "log-1"
+    ]);
+
+    client = await createOrmClient({ databaseUrl, readCache });
+    repository = client.repository(AuditLog);
+
+    await expect(repository.findById("log-1")).resolves.toEqual({
+      id: "log-1",
+      message: "cached message"
+    });
+  });
+
+  it("invalidates only the written model namespace", async () => {
+    @Model({ table: "users" })
+    class User {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      email!: string;
+    }
+
+    @Model({ table: "posts" })
+    class Post {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+
+      @Field.string()
+      title!: string;
+    }
+
+    client = await createTempSqliteClient({
+      readCache: {
+        default: {
+          backend: "memory",
+          ttlSeconds: 60
+        }
+      }
+    });
+    const userRepository = client.repository(User);
+    const postRepository = client.repository(Post);
+
+    await client.pushSchema([User, Post]);
+    await userRepository.create({ id: "user-1", email: "alice@example.com" });
+    await postRepository.create({ id: "post-1", title: "Alpha" });
+
+    await userRepository.findById("user-1");
+    await postRepository.findById("post-1");
+
+    updateSqlite(join(requireTempDirectory(), "test.sqlite"), 'UPDATE "users" SET "email" = ? WHERE "id" = ?', [
+      "stale@example.com",
+      "user-1"
+    ]);
+    updateSqlite(join(requireTempDirectory(), "test.sqlite"), 'UPDATE "posts" SET "title" = ? WHERE "id" = ?', [
+      "Stale title",
+      "post-1"
+    ]);
+
+    await userRepository.update("user-1", { email: "fresh@example.com" });
+
+    await expect(userRepository.findById("user-1")).resolves.toEqual({
+      id: "user-1",
+      email: "fresh@example.com"
+    });
+    await expect(postRepository.findById("post-1")).resolves.toEqual({
+      id: "post-1",
+      title: "Alpha"
+    });
   });
 
   it("introspects pushed model tables", async () => {
@@ -698,6 +990,36 @@ async function createOrmClientForManyToMany() {
   return createOrmClient({
     databaseUrl: `sqlite://${join(directory, "test.sqlite")}`
   });
+}
+
+async function createTempSqliteClient(options?: Omit<OrmClientOptions, "databaseUrl">) {
+  const directory = await mkdtemp(join(tmpdir(), "ezorm-cache-"));
+  tempDirectory = directory;
+  return createOrmClient({
+    ...options,
+    databaseUrl: `sqlite://${join(directory, "test.sqlite")}`
+  });
+}
+
+function requireTempDirectory(): string {
+  if (!tempDirectory) {
+    throw new Error("Expected temporary test directory to exist");
+  }
+
+  return tempDirectory;
+}
+
+function updateSqlite(databasePath: string, sql: string, params: Array<string | number>): void {
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.prepare(sql).run(...params);
+  } finally {
+    database.close();
+  }
+}
+
+async function waitFor(durationMs: number): Promise<void> {
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }
 
 async function seedTagModels(

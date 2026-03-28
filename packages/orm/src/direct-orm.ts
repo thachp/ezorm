@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   getModelMetadata,
   validateModelInput,
@@ -5,6 +8,7 @@ import {
   type FieldMetadata,
   type HasManyRelationMetadata,
   type ManyToManyRelationMetadata,
+  type ModelCacheBackend,
   type ModelMetadata
 } from "@ezorm/core";
 import {
@@ -23,13 +27,33 @@ type QueryOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "like";
 type SortDirection = "asc" | "desc";
 type JoinType = "inner" | "left";
 type MaterializationMode = "entity" | "plain";
+type RepositoryReadResult = object | object[];
 type SupportedRelationMetadata =
   | BelongsToRelationMetadata
   | HasManyRelationMetadata
   | ManyToManyRelationMetadata;
 
+export type ReadCacheBackend = ModelCacheBackend;
+
+export interface ReadCacheDefaultOptions {
+  backend: ReadCacheBackend;
+  ttlSeconds: number;
+}
+
+export interface ReadCacheModelOptions {
+  backend?: ReadCacheBackend | false;
+  ttlSeconds?: number;
+}
+
+export interface ReadCacheOptions {
+  default: ReadCacheDefaultOptions;
+  dir?: string;
+  byModel?: Record<string, ReadCacheModelOptions>;
+}
+
 export interface OrmClientOptions {
   databaseUrl: string;
+  readCache?: false | ReadCacheOptions;
 }
 
 export interface FindManyOptions<T extends object> {
@@ -162,10 +186,23 @@ interface LazyEntityState<T extends object> {
   relationCache: Map<string, LazyRelationCacheEntry>;
 }
 
+interface StoredCacheEntry<T> {
+  expiresAt: number;
+  value: T;
+}
+
+interface ResolvedModelReadCache {
+  backend: ReadCacheBackend;
+  ttlSeconds: number;
+  dir: string;
+  namespace: string;
+}
+
 const MANY_TO_MANY_SOURCE_KEY_ALIAS = "__ezorm_source_key";
 const ENTITY_STATE = Symbol("ezorm.entity.state");
 
 export async function createOrmClient(options: OrmClientOptions): Promise<OrmClient> {
+  const readCache = createReadCacheManager(options.readCache);
   const adapter = await connectRelationalAdapter(options.databaseUrl);
   const ensuredTables = new Set<string>();
 
@@ -311,6 +348,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
     repository<T extends object>(model: ModelClass<T>): Repository<T> {
       const metadata = getModelMetadata(model);
       const primaryKey = getPrimaryKeyField(metadata);
+      const cachePolicy = resolveReadCachePolicy(readCache, metadata);
 
       return {
         async create(input) {
@@ -332,26 +370,38 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
               .join(", ")}) VALUES (${joinPlaceholders(adapter.dialect, fields.length)})`,
             values
           );
+          await readCache.clearNamespace(cachePolicy);
 
           return payload as T;
         },
 
         async findById(id) {
           await ensureTable(model);
-          return createQueryBuilder(context, model, "plain").where(primaryKey.name, "=", id).first();
+          return withReadCache(
+            readCache,
+            cachePolicy,
+            createFindByIdCacheKey(metadata.table, id),
+            () => createQueryBuilder(context, model, "plain").where(primaryKey.name, "=", id).first()
+          ) as Promise<T | undefined>;
         },
 
         async findMany(options = {}) {
+          const normalizedOptions = normalizeFindManyOptions(options);
           const builder = createQueryBuilder(context, model, "plain");
-          for (const [field, value] of Object.entries(options.where ?? {})) {
+          for (const [field, value] of Object.entries(normalizedOptions.where ?? {})) {
             if (value !== undefined) {
               builder.where(field, "=", value as SqlScalar);
             }
           }
-          if (options.orderBy) {
-            builder.orderBy(options.orderBy.field, options.orderBy.direction);
+          if (normalizedOptions.orderBy) {
+            builder.orderBy(normalizedOptions.orderBy.field, normalizedOptions.orderBy.direction);
           }
-          return builder.all();
+          return withReadCache(
+            readCache,
+            cachePolicy,
+            createFindManyCacheKey(metadata.table, normalizedOptions),
+            () => builder.all()
+          ) as Promise<T[]>;
         },
 
         async update(id, patch) {
@@ -392,6 +442,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
             )}`,
             params
           );
+          await readCache.clearNamespace(cachePolicy);
 
           return next as T;
         },
@@ -405,6 +456,7 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
             )} = ${placeholder(adapter.dialect, 1)}`,
             [toDatabaseValue(primaryKey, id, adapter.dialect)]
           );
+          await readCache.clearNamespace(cachePolicy);
         }
       };
     },
@@ -435,9 +487,299 @@ export async function createOrmClient(options: OrmClientOptions): Promise<OrmCli
     },
 
     async close() {
+      await readCache.close();
       await adapter.close();
     }
   };
+}
+
+function createReadCacheManager(options: false | ReadCacheOptions | undefined): ReadCacheManager {
+  if (!options) {
+    return new DisabledReadCacheManager();
+  }
+
+  return new DefaultReadCacheManager({
+    default: {
+      backend: validateReadCacheBackend(options.default?.backend, "readCache.default.backend"),
+      ttlSeconds: validateTtlSeconds(options.default?.ttlSeconds, "readCache.default.ttlSeconds")
+    },
+    dir: resolve(options.dir ?? ".ezorm/cache"),
+    byModel: Object.fromEntries(
+      Object.entries(options.byModel ?? {}).map(([modelName, value]) => [
+        modelName,
+        {
+          backend:
+            value?.backend === undefined
+              ? undefined
+              : validateModelReadCacheBackend(value.backend, `readCache.byModel.${modelName}.backend`),
+          ttlSeconds:
+            value?.ttlSeconds === undefined
+              ? undefined
+              : validateTtlSeconds(value.ttlSeconds, `readCache.byModel.${modelName}.ttlSeconds`)
+        }
+      ])
+    )
+  });
+}
+
+interface ReadCacheManager {
+  get<T extends RepositoryReadResult>(policy: ResolvedModelReadCache | undefined, key: string): Promise<T | undefined>;
+  set<T extends RepositoryReadResult>(policy: ResolvedModelReadCache | undefined, key: string, value: T): Promise<void>;
+  clearNamespace(policy: ResolvedModelReadCache | undefined): Promise<void>;
+  close(): Promise<void>;
+  resolvePolicy(metadata: ModelMetadata): ResolvedModelReadCache | undefined;
+}
+
+class DisabledReadCacheManager implements ReadCacheManager {
+  async get<T extends RepositoryReadResult>(): Promise<T | undefined> {
+    return undefined;
+  }
+
+  async set(): Promise<void> {}
+
+  async clearNamespace(): Promise<void> {}
+
+  async close(): Promise<void> {}
+
+  resolvePolicy(): ResolvedModelReadCache | undefined {
+    return undefined;
+  }
+}
+
+class DefaultReadCacheManager implements ReadCacheManager {
+  private readonly memoryCache = new Map<string, Map<string, StoredCacheEntry<RepositoryReadResult>>>();
+
+  constructor(private readonly options: ResolvedReadCacheOptions) {}
+
+  async get<T extends RepositoryReadResult>(
+    policy: ResolvedModelReadCache | undefined,
+    key: string
+  ): Promise<T | undefined> {
+    if (!policy) {
+      return undefined;
+    }
+
+    if (policy.backend === "memory") {
+      const namespaceCache = this.memoryCache.get(policy.namespace);
+      const entry = namespaceCache?.get(key);
+      if (!entry) {
+        return undefined;
+      }
+      if (entry.expiresAt <= Date.now()) {
+        namespaceCache?.delete(key);
+        if (namespaceCache?.size === 0) {
+          this.memoryCache.delete(policy.namespace);
+        }
+        return undefined;
+      }
+      return cloneCacheValue(entry.value) as T;
+    }
+
+    const filePath = this.filePath(policy, key);
+    const raw = await readFile(filePath, "utf8").catch((error: unknown) => {
+      if (isMissingFileError(error)) {
+        return undefined;
+      }
+      throw error;
+    });
+
+    if (!raw) {
+      return undefined;
+    }
+
+    try {
+      const entry = JSON.parse(raw) as StoredCacheEntry<T>;
+      if (entry.expiresAt <= Date.now()) {
+        await rm(filePath, { force: true });
+        return undefined;
+      }
+      return cloneCacheValue(entry.value);
+    } catch {
+      await rm(filePath, { force: true });
+      return undefined;
+    }
+  }
+
+  async set<T extends RepositoryReadResult>(
+    policy: ResolvedModelReadCache | undefined,
+    key: string,
+    value: T
+  ): Promise<void> {
+    if (!policy) {
+      return;
+    }
+
+    const entry: StoredCacheEntry<T> = {
+      expiresAt: Date.now() + policy.ttlSeconds * 1000,
+      value: cloneCacheValue(value)
+    };
+
+    if (policy.backend === "memory") {
+      const namespaceCache = this.memoryCache.get(policy.namespace) ?? new Map<string, StoredCacheEntry<RepositoryReadResult>>();
+      namespaceCache.set(key, entry as StoredCacheEntry<RepositoryReadResult>);
+      this.memoryCache.set(policy.namespace, namespaceCache);
+      return;
+    }
+
+    const namespaceDir = this.namespaceDirectory(policy);
+    await mkdir(namespaceDir, { recursive: true });
+    await writeFile(this.filePath(policy, key), JSON.stringify(entry), "utf8");
+  }
+
+  async clearNamespace(policy: ResolvedModelReadCache | undefined): Promise<void> {
+    if (!policy) {
+      return;
+    }
+
+    if (policy.backend === "memory") {
+      this.memoryCache.delete(policy.namespace);
+      return;
+    }
+
+    await rm(this.namespaceDirectory(policy), { recursive: true, force: true });
+  }
+
+  async close(): Promise<void> {}
+
+  resolvePolicy(metadata: ModelMetadata): ResolvedModelReadCache | undefined {
+    const modelOverride = this.options.byModel[metadata.name];
+    const modelCache = metadata.cache;
+
+    const backend =
+      modelCache.backend !== "inherit"
+        ? modelCache.backend
+        : modelOverride?.backend ?? this.options.default.backend;
+    if (backend === false) {
+      return undefined;
+    }
+
+    const ttlSeconds =
+      modelCache.ttlSeconds !== "inherit"
+        ? modelCache.ttlSeconds
+        : modelOverride?.ttlSeconds ?? this.options.default.ttlSeconds;
+
+    return {
+      backend,
+      ttlSeconds,
+      dir: this.options.dir,
+      namespace: metadata.table
+    };
+  }
+
+  private namespaceDirectory(policy: ResolvedModelReadCache): string {
+    return resolve(policy.dir, hashCacheSegment(policy.namespace));
+  }
+
+  private filePath(policy: ResolvedModelReadCache, key: string): string {
+    return resolve(this.namespaceDirectory(policy), `${hashCacheSegment(`${policy.namespace}:${key}`)}.json`);
+  }
+}
+
+interface ResolvedReadCacheOptions {
+  default: ReadCacheDefaultOptions;
+  dir: string;
+  byModel: Record<string, ReadCacheModelOptions>;
+}
+
+function resolveReadCachePolicy(
+  readCache: ReadCacheManager,
+  metadata: ModelMetadata
+): ResolvedModelReadCache | undefined {
+  return readCache.resolvePolicy(metadata);
+}
+
+async function withReadCache<T extends RepositoryReadResult | undefined>(
+  readCache: ReadCacheManager,
+  policy: ResolvedModelReadCache | undefined,
+  key: string,
+  loader: () => Promise<T>
+): Promise<T> {
+  const cached = await readCache.get<Exclude<T, undefined> & RepositoryReadResult>(policy, key);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+
+  const value = await loader();
+  if (value !== undefined) {
+    await readCache.set(policy, key, value as Exclude<T, undefined> & RepositoryReadResult);
+  }
+  return value;
+}
+
+function createFindByIdCacheKey(tableName: string, id: string): string {
+  return stableSerialize({
+    table: tableName,
+    op: "findById",
+    id
+  });
+}
+
+function createFindManyCacheKey<T extends object>(tableName: string, options: FindManyOptions<T>): string {
+  return stableSerialize({
+    table: tableName,
+    op: "findMany",
+    where: options.where ?? {},
+    orderBy: options.orderBy ?? null
+  });
+}
+
+function normalizeFindManyOptions<T extends object>(options: FindManyOptions<T>): FindManyOptions<T> {
+  const where = Object.fromEntries(
+    Object.entries(options.where ?? {}).filter(([, value]) => value !== undefined)
+  ) as FindManyOptions<T>["where"];
+
+  return {
+    where,
+    orderBy: options.orderBy
+  };
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerialize(entryValue)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function cloneCacheValue<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function hashCacheSegment(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "ENOENT";
+}
+
+function validateReadCacheBackend(value: unknown, label: string): ReadCacheBackend {
+  if (value === "memory" || value === "file") {
+    return value;
+  }
+  throw new Error(`${label} must be "memory" or "file"`);
+}
+
+function validateModelReadCacheBackend(value: unknown, label: string): ReadCacheBackend | false {
+  if (value === false || value === "memory" || value === "file") {
+    return value;
+  }
+  throw new Error(`${label} must be "memory", "file", or false`);
+}
+
+function validateTtlSeconds(value: unknown, label: string): number {
+  if (Number.isInteger(value) && Number(value) > 0) {
+    return Number(value);
+  }
+  throw new Error(`${label} must be a positive integer`);
 }
 
 function createQueryBuilder<T extends object>(

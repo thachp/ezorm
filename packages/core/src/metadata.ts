@@ -9,6 +9,8 @@ import type {
   IndexMetadata,
   ManyToManyOptions,
   ManyToManyRelationMetadata,
+  ModelCacheOptions,
+  ModelCacheTtlOption,
   ModelOptions,
   ModelKind,
   ModelMetadata,
@@ -36,11 +38,17 @@ function getRegistry(): Map<Function, ModelMetadata> {
   return metadataRegistry;
 }
 
-function ensureModel(target: Function, options?: { kind?: ModelKind; table?: string }): ModelMetadata {
+function ensureModel(
+  target: Function,
+  options?: { kind?: ModelKind; table?: string; cache?: ModelCacheOptions }
+): ModelMetadata {
   const existing = registry.get(target);
   if (existing) {
     existing.kind = options?.kind ?? existing.kind;
     existing.table = options?.table ?? existing.table;
+    if (!existing.cache || options?.cache) {
+      existing.cache = normalizeModelCacheOptions(options?.cache ?? existing.cache);
+    }
     return existing;
   }
 
@@ -49,6 +57,7 @@ function ensureModel(target: Function, options?: { kind?: ModelKind; table?: str
     target,
     name: target.name,
     table: options?.table ?? defaultTableName(target.name),
+    cache: normalizeModelCacheOptions(options?.cache),
     fields: [],
     indices: [],
     relations: []
@@ -84,7 +93,11 @@ function addRelation(target: object, propertyKey: string | symbol, relation: Pen
 
 export function Model(options: ModelOptions = {}): ClassDecorator {
   return (target) => {
-    ensureModel(target, { kind: "model", table: options.table ?? defaultTableName(target.name) });
+    ensureModel(target, {
+      kind: "model",
+      table: options.table ?? defaultTableName(target.name),
+      cache: options.cache
+    });
   };
 }
 
@@ -231,6 +244,7 @@ export function validateModelInput(target: Function, input: Record<string, unkno
 function cloneMetadata(value: ModelMetadata): ModelMetadata {
   return {
     ...value,
+    cache: { ...value.cache },
     fields: value.fields.map((field) => ({ ...field })),
     indices: value.indices.map((index) => ({ ...index, fields: [...index.fields] })),
     relations: value.relations.map((relation) => ({ ...relation }))
@@ -238,6 +252,9 @@ function cloneMetadata(value: ModelMetadata): ModelMetadata {
 }
 
 function validateModelMetadata(metadata: ModelMetadata, visited = new Set<Function>()): void {
+  metadata.cache = normalizeModelCacheOptions(metadata.cache);
+  validateModelCacheOptions(metadata.name, metadata.cache);
+
   if (visited.has(metadata.target)) {
     return;
   }
@@ -273,6 +290,32 @@ function validateModelMetadata(metadata: ModelMetadata, visited = new Set<Functi
       default:
         validateModelMetadata(ensureModel(relation.target()), visited);
     }
+  }
+}
+
+function normalizeModelCacheOptions(options?: ModelCacheOptions): ModelMetadata["cache"] {
+  return {
+    backend: options?.backend ?? "inherit",
+    ttlSeconds: options?.ttlSeconds ?? "inherit"
+  };
+}
+
+function validateModelCacheOptions(modelName: string, options: ModelMetadata["cache"]): void {
+  const validBackends = new Set(["inherit", "memory", "file", false]);
+  if (!validBackends.has(options.backend)) {
+    throw new Error(`Model ${modelName} cache backend must be "inherit", "memory", "file", or false`);
+  }
+
+  validateCacheTtlSeconds(modelName, options.ttlSeconds);
+}
+
+function validateCacheTtlSeconds(modelName: string, ttlSeconds: ModelCacheTtlOption): void {
+  if (ttlSeconds === "inherit") {
+    return;
+  }
+
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error(`Model ${modelName} cache ttlSeconds must be a positive integer`);
   }
 }
 

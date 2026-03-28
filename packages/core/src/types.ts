@@ -1,7 +1,22 @@
 export type ModelKind = "model";
 
+export type ModelCacheBackend = "memory" | "file";
+export type ModelCacheBackendOption = "inherit" | ModelCacheBackend | false;
+export type ModelCacheTtlOption = number | "inherit";
+
+export interface ModelCacheOptions {
+  backend?: ModelCacheBackendOption;
+  ttlSeconds?: ModelCacheTtlOption;
+}
+
+export interface ResolvedModelCacheOptions {
+  backend: ModelCacheBackendOption;
+  ttlSeconds: ModelCacheTtlOption;
+}
+
 export interface ModelOptions {
   table?: string;
+  cache?: ModelCacheOptions;
 }
 
 export interface FieldOptions {
@@ -84,6 +99,7 @@ export interface ModelMetadata {
   target: Function;
   name: string;
   table: string;
+  cache: ResolvedModelCacheOptions;
   fields: FieldMetadata[];
   indices: IndexMetadata[];
   relations: RelationMetadata[];

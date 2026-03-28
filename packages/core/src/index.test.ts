@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BelongsTo,
   Field,
@@ -15,6 +15,10 @@ import {
 
 describe("@ezorm/core", () => {
   beforeEach(() => {
+    clearMetadataRegistry();
+  });
+
+  afterEach(() => {
     clearMetadataRegistry();
   });
 
@@ -50,6 +54,10 @@ describe("@ezorm/core", () => {
     const metadata = getModelMetadata(User);
     expect(metadata.kind).toBe("model");
     expect(metadata.table).toBe("users");
+    expect(metadata.cache).toEqual({
+      backend: "inherit",
+      ttlSeconds: "inherit"
+    });
     expect(metadata.fields.map((field) => field.name)).toEqual(["id", "email"]);
     expect(metadata.indices).toHaveLength(2);
     expect(metadata.relations[0]).toMatchObject({
@@ -159,5 +167,41 @@ describe("@ezorm/core", () => {
     expect(validateModelInput(Order, { id: "ord_1", amount: -1 })).toEqual([
       { field: "amount", message: "Must be positive" }
     ]);
+  });
+
+  it("stores explicit cache metadata on models", () => {
+    @Model({
+      cache: {
+        backend: "file",
+        ttlSeconds: 60
+      }
+    })
+    class AuditLog {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    expect(getModelMetadata(AuditLog).cache).toEqual({
+      backend: "file",
+      ttlSeconds: 60
+    });
+  });
+
+  it("rejects invalid model cache ttl values", () => {
+    @Model({
+      cache: {
+        ttlSeconds: 0
+      }
+    })
+    class CachedModel {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    expect(() => getModelMetadata(CachedModel)).toThrow(
+      "Model CachedModel cache ttlSeconds must be a positive integer"
+    );
   });
 });

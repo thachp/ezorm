@@ -13,7 +13,13 @@ npm install @ezorm/core
 ```ts
 import { Field, Model, PrimaryKey } from "@ezorm/core";
 
-@Model({ table: "todos" })
+@Model({
+  table: "todos",
+  cache: {
+    backend: "inherit",
+    ttlSeconds: "inherit"
+  }
+})
 class Todo {
   @PrimaryKey()
   @Field.string()
@@ -23,3 +29,5 @@ class Todo {
   title!: string;
 }
 ```
+
+`cache` is optional model metadata for the direct Node ORM read cache. Models can inherit the client default, disable caching with `backend: false`, or override the backend and `ttlSeconds` per model.
