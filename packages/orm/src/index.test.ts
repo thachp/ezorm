@@ -494,6 +494,62 @@ describe("@ezorm/orm", () => {
     ).resolves.toEqual({ id: "post-3", tagLabel: "docs" });
   });
 
+  for (const [name, databaseUrl] of [
+    ["postgres", process.env.EZORM_TEST_POSTGRES_URL],
+    ["mysql", process.env.EZORM_TEST_MYSQL_URL],
+    ["mssql", process.env.EZORM_TEST_MSSQL_URL]
+  ] as const) {
+    it(`supports joined relation reads on ${name} when configured`, async () => {
+      if (!databaseUrl) {
+        return;
+      }
+
+      const suffix = `${name}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const { User, Post } = defineScopedAuthorModels(suffix);
+      client = await createOrmClient({ databaseUrl });
+      await seedAuthorModels(client, User, Post);
+
+      await expect(
+        client
+          .query(Post)
+          .join("author")
+          .where("author.email", "=", "alice@example.com")
+          .orderBy("title", "asc")
+          .all()
+      ).resolves.toEqual([
+        { id: "post-1", userId: "user-1", title: "Alpha" },
+        { id: "post-3", userId: "user-1", title: "Gamma" }
+      ]);
+
+      const includedPosts = await client.query(Post).include("author").orderBy("title", "asc").all();
+      await expect(includedPosts[0].author).resolves.toEqual({
+        id: "user-1",
+        email: "alice@example.com"
+      });
+
+      const plainPosts = await client.repository(Post).findMany({
+        orderBy: { field: "title", direction: "asc" }
+      });
+      await client.loadMany(Post, plainPosts, "author");
+      expect(plainPosts[0]).toEqual({
+        id: "post-1",
+        userId: "user-1",
+        title: "Alpha",
+        author: {
+          id: "user-1",
+          email: "alice@example.com"
+        }
+      });
+
+      await expect(client.pullSchema()).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: `users_${suffix}` }),
+          expect.objectContaining({ name: `posts_${suffix}` })
+        ])
+      );
+    });
+  }
+
 });
 
 function defineAuthorModels() {
@@ -560,6 +616,39 @@ function defineTagModels() {
   }
 
   return { Post, Tag };
+}
+
+function defineScopedAuthorModels(suffix: string) {
+  @Model({ table: `users_${suffix}` })
+  class User {
+    @PrimaryKey()
+    @Field.string()
+    id!: string;
+
+    @Field.string()
+    email!: string;
+
+    @HasMany(() => Post, { localKey: "id", foreignKey: "userId" })
+    posts!: Post[];
+  }
+
+  @Model({ table: `posts_${suffix}` })
+  class Post {
+    @PrimaryKey()
+    @Field.string()
+    id!: string;
+
+    @Field.string()
+    userId!: string;
+
+    @Field.string()
+    title!: string;
+
+    @BelongsTo(() => User, { foreignKey: "userId", targetKey: "id" })
+    author!: User | undefined;
+  }
+
+  return { User, Post };
 }
 
 async function seedAuthorModels(
