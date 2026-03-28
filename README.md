@@ -91,10 +91,10 @@ That gives you:
 `@ezorm/orm` is the primary Node.js ORM surface. The fastest first run is SQLite in memory.
 
 ```ts
-import { Field, Model, PrimaryKey } from "@ezorm/core";
-import { createOrmClient } from "@ezorm/orm";
+import { Field, Model, PrimaryKey } from '@ezorm/core';
+import { createOrmClient } from '@ezorm/orm';
 
-@Model({ table: "todos" })
+@Model({ table: 'todos' })
 class Todo {
   @PrimaryKey()
   @Field.string()
@@ -107,37 +107,41 @@ class Todo {
   completed!: boolean;
 }
 
-const client = await createOrmClient({
-  databaseUrl: "sqlite::memory:"
-});
+const run = async () => {
+  const client = await createOrmClient({
+    databaseUrl: 'sqlite::memory:',
+  });
 
-await client.pushSchema([Todo]);
+  await client.pushSchema([Todo]);
 
-const todos = client.repository(Todo);
+  const todos = client.repository(Todo);
 
-await todos.create({
-  id: "todo_1",
-  title: "Ship the README",
-  completed: false
-});
+  await todos.create({
+    id: 'todo_1',
+    title: 'Ship the README',
+    completed: false,
+  });
 
-console.log(await todos.findById("todo_1"));
+  console.log(await todos.findById('todo_1'));
 
-console.log(
-  await todos.findMany({
-    orderBy: { field: "title", direction: "asc" }
-  })
-);
+  console.log(
+    await todos.findMany({
+      orderBy: { field: 'title', direction: 'asc' },
+    }),
+  );
 
-console.log(
-  await todos.update("todo_1", {
-    completed: true
-  })
-);
+  console.log(
+    await todos.update('todo_1', {
+      completed: true,
+    }),
+  );
 
-await todos.delete("todo_1");
+  await todos.delete('todo_1');
 
-await client.close();
+  await client.close();
+};
+
+void run();
 ```
 
 The repository API is intentionally small in v1:
