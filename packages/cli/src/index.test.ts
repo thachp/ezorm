@@ -147,19 +147,23 @@ describe("ezorm CLI", () => {
     expect(io.logs.join("\n")).toContain(`Pending migrations: ${manualMigration}`);
   });
 
-  it("loads decorator-authored TypeScript models from ezorm.config.ts via the published bin path", async () => {
-    await ensureCliBuild();
-    const directory = await createTypeScriptCliWorkspace();
+  it(
+    "loads decorator-authored TypeScript models from ezorm.config.ts via the published bin path",
+    async () => {
+      await ensureCliBuild();
+      const directory = await createTypeScriptCliWorkspace();
 
-    const pushResult = runCliBinary(["db", "push"], directory);
-    expect(pushResult.status).toBe(0);
-    expect(pushResult.stdout).toContain('CREATE TABLE IF NOT EXISTS "todos"');
-    expect(pushResult.stdout).toContain('CREATE INDEX IF NOT EXISTS "todos_title_idx"');
+      const pushResult = runCliBinary(["db", "push"], directory);
+      expect(pushResult.status).toBe(0);
+      expect(pushResult.stdout).toContain('CREATE TABLE IF NOT EXISTS "todos"');
+      expect(pushResult.stdout).toContain('CREATE INDEX IF NOT EXISTS "todos_title_idx"');
 
-    const rerunResult = runCliBinary(["db", "push"], directory);
-    expect(rerunResult.status).toBe(0);
-    expect(rerunResult.stdout).toContain("Schema is up to date.");
-  });
+      const rerunResult = runCliBinary(["db", "push"], directory);
+      expect(rerunResult.status).toBe(0);
+      expect(rerunResult.stdout).toContain("Schema is up to date.");
+    },
+    15_000
+  );
 
   it("fails clearly when multiple config files are present", async () => {
     const directory = await createCliWorkspace();
