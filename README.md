@@ -1,108 +1,53 @@
 # ezorm
 
-`ezorm` is the CLI package for Ezorm workflows. This repository also contains the `@ezorm/*` TypeScript packages for model metadata, ORM repositories, and framework/runtime integration.
+`ezorm` is an ORM-first TypeScript workspace built around decorated models, small repository CRUD, explicit read queries, and an optional managed proxy runtime.
 
-> Current status
->
-> - `@ezorm/core` + `@ezorm/orm` are the primary application path.
-> - The `ezorm` CLI executes migration and schema workflows from an explicit `ezorm.config.*` file.
-> - The Nest and Next todo examples are the best end-to-end references today.
-> - The example ORM flow defaults to SQLite in-memory, so restarting the example processes clears data.
+The practical path today is:
 
-## Why Ezorm Is Different
-
-Ezorm is intentionally split into a small TypeScript ORM surface and an optional Rust-backed proxy runtime instead of treating every environment as the same deployment target. `@ezorm/core` keeps model metadata, validation, indices, and relations in decorated TypeScript classes, and `@ezorm/orm` builds a focused repository and read-query API on top of that model layer. The direct `@ezorm/orm` path and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL from Node, while `@ezorm/runtime-proxy` plus the managed proxy provide pooled repository CRUD plus schema push/pull for SQLite, PostgreSQL, MySQL, and MSSQL through the Rust runtime components. That makes connection pooling and runtime shape an explicit architectural choice instead of something hidden behind a single adapter.
-
-| Dimension | ezorm | Prisma | Many TypeScript ORMs |
-| --- | --- | --- | --- |
-| Model definition | Decorated TypeScript classes in `@ezorm/core` | Schema file plus generated client | Varies between decorators, schema builders, and active-record style models |
-| Validation / metadata | Model definitions produce runtime metadata plus input validation from the same source | Type safety centers on the generated client and schema, not decorator metadata | Often split between ORM metadata and separate validation libraries |
-| Repository API shape | Small CRUD repositories plus explicit read queries, joins, includes, and relation loaders | Generated model delegates with broader query APIs | Often larger query-builder or repository surfaces |
-| Database support today | Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL; `@ezorm/runtime-proxy` supports pooled CRUD and schema sync for SQLite, PostgreSQL, MySQL, and MSSQL | Multi-database support is part of the main client/runtime story | Varies by adapter and dialect |
-| Connection pooling today | `@ezorm/runtime-proxy` uses pooled Rust database connections; direct `@ezorm/orm` and `@ezorm/runtime-node` use direct driver connections in the app runtime | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
-| Runtime / deployment shape | Can run directly in local Node SQLite flows or move relational work behind Rust-backed runtime and proxy helpers | Usually presented as one generated client talking to the database from server runtimes | Usually optimized for direct database access from the app runtime |
-| Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI adds checked-in SQL migrations, status, resolve, and direct `db push` / `db pull` workflows from an explicit config file | Migration and introspection workflows are core product features | Varies widely across tools |
-| Current scope | Focused on decorated models, repository CRUD, explicit read queries, query-scoped lazy relations, projection selects, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
-
-Current limits are important:
-
-- Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL.
-- Cross-database pooled ORM CRUD and schema sync are available through `@ezorm/runtime-proxy` and the managed proxy runtime for SQLite, PostgreSQL, MySQL, and MSSQL.
-- Query support is intentionally focused on repository CRUD plus explicit read queries, query-scoped lazy relations, projection selects, and relation loading.
-- Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the proxy-backed runtime yet.
-- The CLI expects a project-level `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` that exports `databaseUrl`, `models`, and an optional `migrationsDir`.
-
-If you want the current ezorm product path, start with the `@ezorm/core` and `@ezorm/orm` model and repository flow shown below, then add runtimes and adapters as needed.
+- `@ezorm/core` defines decorated models plus runtime metadata and validation.
+- `@ezorm/orm` is the primary direct Node.js ORM for SQLite, PostgreSQL, MySQL, and MSSQL.
+- `ezorm` is the CLI for migrations and schema workflows from an explicit `ezorm.config.*` file.
+- The maintained Nest and Next todo apps are the best end-to-end references in this repository.
+- The maintained examples default to `sqlite::memory:`, so restarting those processes clears data.
 
 ## Start Here
 
-If you have never used this library before, use this order:
+If you are new to ezorm, use this order:
 
-1. Run `npx ezorm --help` to see the current CLI surface.
-2. Install `@ezorm/core` and `@ezorm/orm`.
-3. Define a decorated model class.
-4. Create an ORM client and use a repository.
-5. Add a runtime or framework adapter only after the model/repository flow works.
+1. Install `@ezorm/core` and `@ezorm/orm`.
+2. Define a decorated model.
+3. Create a client, run `pushSchema`, and use a repository.
+4. Add the CLI for checked-in migration workflows.
+5. Add a framework adapter or proxy runtime only after the direct ORM flow works.
 
-## Install By Intent
+Recommended first install:
 
-| Goal | Command |
+```sh
+npm install @ezorm/core @ezorm/orm
+```
+
+Install by intent:
+
+| Goal | Package |
 | --- | --- |
-| Try the CLI without installing anything | `npx ezorm --help` |
-| Define model metadata with decorators | `npm install @ezorm/core` |
-| Persist models with repository CRUD | `npm install @ezorm/orm` |
-| Add a Node.js runtime helper | `npm install @ezorm/runtime-node` |
-| Add a pooled HTTP runtime client | `npm install @ezorm/runtime-proxy` |
-| Add managed proxy lifecycle helpers | `npm install @ezorm/proxy-node` |
-| Add the Next.js ORM adapter | `npm install @ezorm/next` |
-| Add the NestJS ORM adapter | `npm install @ezorm/nestjs` |
+| Define model metadata with decorators | `@ezorm/core` |
+| Use direct Node.js ORM repositories and queries | `@ezorm/orm` |
+| Use the CLI for migrations and schema workflows | `ezorm` |
+| Wrap the direct ORM with a Node runtime helper | `@ezorm/runtime-node` |
+| Reuse direct ORM clients in Next.js Node runtimes | `@ezorm/next` |
+| Wire ORM clients and repositories into Nest DI | `@ezorm/nestjs` |
+| Use the pooled HTTP proxy client | `@ezorm/runtime-proxy` |
+| Start and manage the packaged proxy process from Node.js | `@ezorm/proxy-node` |
 
-## Try The CLI In 30 Seconds
+To inspect the current CLI surface without installing anything:
 
 ```sh
 npx ezorm --help
 ```
 
-Current output:
-
-```text
-Usage:
-  ezorm migrate generate [name]
-  ezorm migrate apply
-  ezorm migrate status
-  ezorm migrate resolve --applied <filename>
-  ezorm migrate resolve --rolled-back <filename>
-  ezorm db pull
-  ezorm db push
-```
-
-Example config:
-
-```js
-import { TodoModel } from "./models.js";
-
-export default {
-  databaseUrl: "sqlite:///tmp/ezorm.db",
-  models: [TodoModel],
-  migrationsDir: "migrations"
-};
-```
-
-`migrate generate` writes additive SQL files, `migrate apply` executes pending files and records them in `_ezorm_migrations`, `migrate resolve` reconciles migration history only, `db pull` prints the live schema as JSON, and `db push` applies additive schema drift directly without updating migration history.
-
-## Maintainer Release Workflow
-
-Use the committed package manifests as the source of truth for npm releases.
-
-1. Update all release package versions with `pnpm version:workspace <version>`.
-2. Commit the version bump on `main`.
-3. Trigger the `Release npm Packages` GitHub Actions workflow from `main`.
-
-The release workflow validates that every publishable package shares the same version, checks that the target version does not already exist on npm, publishes the JavaScript packages plus the first-pass proxy binary packages, and then pushes a `v<version>` git tag.
-
 ## Define Your First Model
 
-If your first question is "how do I define the model?", start with `@ezorm/core`.
+Start with `@ezorm/core` when you want model metadata and input validation from the same decorated class.
 
 ```ts
 import {
@@ -136,14 +81,14 @@ console.log(
 );
 ```
 
-This gives you immediate metadata and validation:
+That gives you:
 
-- `getModelMetadata(...)` shows the resolved table, fields, indices, and relations.
-- `validateModelInput(...)` checks plain input objects against field definitions.
+- runtime metadata for tables, fields, indices, and relations
+- input validation from the same model definition
 
-## Persist The Model With A Repository
+## Build Your First CRUD Flow
 
-`@ezorm/orm` is the primary runtime package. It creates a SQL-backed client and exposes repositories for CRUD operations.
+`@ezorm/orm` is the primary Node.js ORM surface. The fastest first run is SQLite in memory.
 
 ```ts
 import { Field, Model, PrimaryKey } from "@ezorm/core";
@@ -177,14 +122,25 @@ await todos.create({
 });
 
 console.log(await todos.findById("todo_1"));
+
 console.log(
   await todos.findMany({
     orderBy: { field: "title", direction: "asc" }
   })
 );
+
+console.log(
+  await todos.update("todo_1", {
+    completed: true
+  })
+);
+
+await todos.delete("todo_1");
+
+await client.close();
 ```
 
-The repository surface is intentionally small in v1:
+The repository API is intentionally small in v1:
 
 - `create`
 - `findById`
@@ -192,9 +148,68 @@ The repository surface is intentionally small in v1:
 - `update`
 - `delete`
 
-`findMany` still supports exact-match scalar filters and simple ordering for single-table CRUD.
+`findMany(...)` supports exact-match scalar filters and simple ordering for single-table CRUD.
 
-For relation-aware reads, use the read query builder and explicit loaders:
+## Manage Schema With The CLI
+
+The `ezorm` CLI uses a project-level config file named one of:
+
+- `ezorm.config.mjs`
+- `ezorm.config.js`
+- `ezorm.config.cjs`
+
+The config must export:
+
+- `databaseUrl`
+- `models`
+- optional `migrationsDir`
+
+Example:
+
+```js
+import { Todo } from "./models.js";
+
+export default {
+  databaseUrl: "sqlite:///tmp/ezorm.db",
+  models: [Todo],
+  migrationsDir: "migrations"
+};
+```
+
+Current CLI commands:
+
+```text
+ezorm migrate generate [name]
+ezorm migrate apply
+ezorm migrate status
+ezorm migrate resolve --applied <filename>
+ezorm migrate resolve --rolled-back <filename>
+ezorm db pull
+ezorm db push
+```
+
+Typical workflow:
+
+```sh
+npx ezorm migrate generate init
+npx ezorm migrate apply
+npx ezorm migrate status
+npx ezorm db pull
+npx ezorm db push
+```
+
+Command behavior today:
+
+- `migrate generate` writes additive SQL migration files.
+- `migrate apply` executes pending migration files and records them in `_ezorm_migrations`.
+- `migrate status` shows migration state.
+- `migrate resolve` only reconciles migration history. It does not execute SQL.
+- `db pull` prints the live schema as JSON.
+- `db push` applies additive schema drift directly without updating migration history, which makes it the development shortcut rather than the checked-in migration path.
+
+## Read Relations As A Next Step
+
+Use repository CRUD for simple writes and single-table reads. Use `client.query(...)` plus explicit relation metadata for relation-aware reads.
 
 ```ts
 import { BelongsTo, Field, HasMany, Model, PrimaryKey } from "@ezorm/core";
@@ -244,9 +259,11 @@ const posts = await client
   .all();
 
 const users = await client.query(User).include("posts").all();
+
 await posts[0].author;
 await users[0].posts;
 await client.load(Post, posts[0], "author");
+await client.loadMany(User, users, "posts");
 
 const projected = await client
   .query(Post)
@@ -257,108 +274,45 @@ const projected = await client
   })
   .orderBy("title", "asc")
   .all();
+
+console.log(projected);
 ```
 
-Current relation support is intentionally narrow:
+Current relation behavior:
 
-- `BelongsTo`, `HasMany`, and `ManyToMany`
-- explicit key mappings are required
-- `client.query(Model)` is read-only
-- query results are model instances with non-enumerable lazy relation properties
-- relation properties are promise-valued, for example `await post.author` and `await user.posts`
-- `include(...)` prewarms lazy relation caches on query entities without changing the enumerable row shape
-- `load(...)` and `loadMany(...)` remain the explicit plain-object relation APIs
-- `select(...)` switches the query into flat projection mode and returns plain rows
+- `BelongsTo`, `HasMany`, and `ManyToMany` are supported.
+- Relation metadata requires explicit key mappings.
+- `client.query(Model)` is read-only.
+- `include(...)` prewarms lazy relation caches on query entities.
+- `await post.author` and `await user.posts` read lazy relation properties from query results.
+- `load(...)` and `loadMany(...)` are the explicit plain-object relation loaders.
+- `select(...)` switches the query into flat projection mode and returns plain rows.
 
-Many-to-many relations use an explicit join table and remain read-oriented in v1:
+Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are available on the direct ORM path. They are not implemented on proxy-backed runtimes yet.
+
+## Choose A Runtime Or Framework Adapter
+
+Choose the smallest layer that matches your deployment shape.
+
+### Direct `@ezorm/orm`
+
+Use this first. It is the primary direct Node.js ORM surface for SQLite, PostgreSQL, MySQL, and MSSQL.
+
+### `@ezorm/runtime-node`
+
+Use this when you want a thin Node runtime wrapper but the same direct ORM behavior surface.
 
 ```ts
-import { Field, ManyToMany, Model, PrimaryKey } from "@ezorm/core";
+import { createNodeRuntime } from "@ezorm/runtime-node";
 
-@Model({ table: "posts" })
-class Post {
-  @PrimaryKey()
-  @Field.string()
-  id!: string;
-
-  @Field.string()
-  title!: string;
-
-  @ManyToMany(() => Tag, {
-    throughTable: "post_tags",
-    sourceKey: "id",
-    throughSourceKey: "post_id",
-    targetKey: "id",
-    throughTargetKey: "tag_id"
-  })
-  tags!: Tag[];
-}
-
-@Model({ table: "tags" })
-class Tag {
-  @PrimaryKey()
-  @Field.string()
-  id!: string;
-
-  @Field.string()
-  label!: string;
-}
-
-await client.pushSchema([Post, Tag]);
-
-const postsWithOrmTag = await client
-  .query(Post)
-  .join("tags")
-  .where("tags.label", "=", "orm")
-  .include("tags")
-  .all();
-
-await postsWithOrmTag[0].tags;
+const client = await createNodeRuntime({
+  connect: { databaseUrl: "sqlite::memory:" }
+});
 ```
 
-## CLI Workflows Available Today
+### `@ezorm/next/node`
 
-The current public CLI surface is defined in [`packages/cli/src/index.ts`](/Users/thachp/repos/sqlmodel-ts/packages/cli/src/index.ts):
-
-```sh
-ezorm migrate generate [name]
-ezorm migrate apply
-ezorm migrate status
-ezorm migrate resolve --applied <filename>
-ezorm migrate resolve --rolled-back <filename>
-ezorm db pull
-ezorm db push
-```
-
-Example CLI workflow:
-
-```sh
-npx ezorm migrate generate init
-npx ezorm migrate apply
-npx ezorm migrate status
-npx ezorm db pull
-npx ezorm db push
-```
-
-Inside this workspace, you can build and run the local CLI with:
-
-```sh
-pnpm build:ezorm
-node packages/cli/bin/ezorm.js --help
-```
-
-## Choose A Runtime
-
-Once your model/repository flow is in place, pick the adapter that matches your app:
-
-- `@ezorm/runtime-node` for direct local SQLite Node.js usage
-- `@ezorm/runtime-proxy` plus `@ezorm/proxy-node` when you need pooled or cross-database ORM transport
-- `@ezorm/next`
-  Use `@ezorm/next/node` to create or reuse a cached direct ORM client in server components, route handlers, and server actions. Use `@ezorm/next/edge` only when edge code must talk to an HTTP proxy endpoint.
-- `@ezorm/nestjs`
-  Use `EzormModule.forRoot(...)` and `EzormModule.forFeature([...])` to wire an `OrmClient` and repositories into Nest DI.
-
-Minimal Next.js node usage:
+Use this in Next.js server components, route handlers, and server actions when you want a cached direct ORM client.
 
 ```ts
 import { getNextNodeClient } from "@ezorm/next/node";
@@ -369,11 +323,13 @@ const client = await getNextNodeClient({
 });
 ```
 
-Minimal NestJS usage:
+### `@ezorm/nestjs`
+
+Use this when you want an `OrmClient` and repositories wired through Nest dependency injection.
 
 ```ts
 import { Module } from "@nestjs/common";
-import { EzormModule, InjectEzormRepository } from "@ezorm/nestjs";
+import { EzormModule } from "@ezorm/nestjs";
 import { Todo } from "./todo.model";
 
 @Module({
@@ -387,16 +343,49 @@ import { Todo } from "./todo.model";
 export class AppModule {}
 ```
 
-The maintained examples live here:
+### Optional proxy runtime
 
-- NestJS todo backend: [`examples/apps/nest-todo-api`](/Users/thachp/repos/sqlmodel-ts/examples/apps/nest-todo-api)
-- Next.js Tailwind todo frontend: [`examples/apps/next-todo-web`](/Users/thachp/repos/sqlmodel-ts/examples/apps/next-todo-web)
-- Shared todo domain code: [`examples/packages/todo-domain`](/Users/thachp/repos/sqlmodel-ts/examples/packages/todo-domain)
+Use `@ezorm/runtime-proxy` and `@ezorm/proxy-node` only when you specifically need the managed proxy flow.
 
-## Notes
+- `@ezorm/proxy-node` starts and manages the packaged proxy binary from Node.js.
+- `@ezorm/runtime-proxy` is the HTTP client for that proxy.
+- The managed proxy supports pooled repository CRUD plus `pushSchema` and `pullSchema` for SQLite, PostgreSQL, MySQL, and MSSQL.
+- Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the pooled proxy runtime yet.
+- For Node-managed proxy usage, prefer `@ezorm/proxy-node` instead of documenting manual Cargo startup as the default workflow.
 
-The maintained product path is `@ezorm/core` + `@ezorm/orm`, with `@ezorm/runtime-proxy` as the optional pooled transport. The examples, adapters, and CLI in this repository are intentionally centered on simple ORM-style CRUD workflows with direct framework integration instead of CQRS-style indirection.
+## Examples And Current Limits
+
+Use these examples when you want a complete application reference:
+
+- NestJS todo backend: [examples/apps/nest-todo-api](examples/apps/nest-todo-api)
+- Next.js todo frontend: [examples/apps/next-todo-web](examples/apps/next-todo-web)
+- Shared todo domain code: [examples/packages/todo-domain](examples/packages/todo-domain)
+
+Current limits that matter when you are evaluating the workflow:
+
+- The maintained todo examples default to `sqlite::memory:`, so process restarts clear state.
+- Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL.
+- Proxy-backed runtimes support pooled CRUD plus `pushSchema` and `pullSchema` for SQLite, PostgreSQL, MySQL, and MSSQL.
+- Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` remain direct-ORM features today.
+- Primary key handling is intentionally simple in v1: application-supplied keys and single-column primary keys only.
+
+## Why Ezorm Is Different
+
+Ezorm keeps a few design choices explicit:
+
+- decorated model classes are the source for metadata, validation, indices, and relations
+- repository CRUD stays small, while relation-aware reads move into explicit `query(...)` flows
+- runtime shape is an architectural choice, with a clear split between direct ORM usage and the managed proxy path
+- schema workflows stay explicit through `pushSchema`, `pullSchema`, and CLI migrations driven by config
+
+## Maintainer Release Workflow
+
+Use the committed package manifests as the source of truth for npm releases.
+
+1. Update versions with `pnpm version:workspace <version>`.
+2. Commit the version bump on `main`.
+3. Trigger the `Release npm Packages` GitHub Actions workflow from `main`.
 
 ## License
 
-Ezorm is available under the [MIT License](/Users/thachp/repos/sqlmodel-ts/LICENSE). Copyright (c) 2026 ezorm contributors.
+Ezorm is available under the [MIT License](LICENSE). Copyright (c) 2026 ezorm contributors.
