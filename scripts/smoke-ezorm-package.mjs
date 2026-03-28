@@ -49,6 +49,12 @@ function runNpmInstallSmoke() {
   run("npm", ["init", "-y"], installWorkspace);
   run("npm", ["install", coreTarballPath, ormTarballPath, tarballPath], installWorkspace);
   assertOutput(run("npx", ["ezorm", "--help"], installWorkspace).stdout, "Usage:", "npm install smoke test");
+  writeTypeScriptCliFixture(installWorkspace);
+  assertOutput(
+    run("npx", ["ezorm", "db", "push"], installWorkspace).stdout,
+    'CREATE TABLE IF NOT EXISTS "todos"',
+    "npm install TypeScript config smoke test"
+  );
 }
 
 function runPnpmAddSmoke() {
@@ -80,6 +86,12 @@ function runPnpmAddSmoke() {
     run("pnpm", ["exec", "ezorm", "--help"], installWorkspace).stdout,
     "Usage:",
     "pnpm add smoke test"
+  );
+  writeTypeScriptCliFixture(installWorkspace);
+  assertOutput(
+    run("pnpm", ["exec", "ezorm", "db", "push"], installWorkspace).stdout,
+    'CREATE TABLE IF NOT EXISTS "todos"',
+    "pnpm add TypeScript config smoke test"
   );
 }
 
@@ -129,6 +141,51 @@ function assertOutput(actual, expected, label) {
   if (!actual.includes(expected)) {
     throw new Error(`${label} expected "${expected}" but received "${actual.trim()}"`);
   }
+}
+
+function writeTypeScriptCliFixture(cwd) {
+  writeFileSync(
+    resolve(cwd, "tsconfig.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          experimentalDecorators: true
+        }
+      },
+      null,
+      2
+    )}\n`
+  );
+  writeFileSync(
+    resolve(cwd, "models.ts"),
+    [
+      'import { Field, Index, Model, PrimaryKey } from "@ezorm/core";',
+      "",
+      '@Model({ table: "todos" })',
+      '@Index(["title"], { name: "todos_title_idx" })',
+      "export class TodoModel {",
+      "  @PrimaryKey()",
+      "  @Field.string()",
+      "  id!: string;",
+      "",
+      "  @Field.string()",
+      "  title!: string;",
+      "}"
+    ].join("\n")
+  );
+  writeFileSync(
+    resolve(cwd, "ezorm.config.ts"),
+    [
+      'import { TodoModel } from "./models.ts";',
+      "",
+      "export default {",
+      `  databaseUrl: ${JSON.stringify(`sqlite://${resolve(cwd, "app.sqlite")}`)},`,
+      "  models: [TodoModel]",
+      "};"
+    ].join("\n")
+  );
 }
 
 function parsePackOutput(stdout) {

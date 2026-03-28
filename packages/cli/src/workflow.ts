@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getModelMetadata } from "@ezorm/core";
@@ -13,7 +13,14 @@ import {
 } from "@ezorm/orm";
 import type { CliCommand, EzormCliConfig } from "./index.js";
 
-const CONFIG_FILENAMES = ["ezorm.config.mjs", "ezorm.config.js", "ezorm.config.cjs"] as const;
+const CONFIG_FILENAMES = [
+  "ezorm.config.ts",
+  "ezorm.config.mts",
+  "ezorm.config.cts",
+  "ezorm.config.mjs",
+  "ezorm.config.js",
+  "ezorm.config.cjs"
+] as const;
 const MIGRATION_HISTORY_TABLE = "_ezorm_migrations";
 
 async function loadConfigModule(specifier: string): Promise<{ default?: EzormCliConfig }> {
@@ -262,10 +269,16 @@ async function runMigrateResolve(
 }
 
 async function loadCliConfig(cwd: string): Promise<LoadedCliConfig> {
-  const configPath = await findConfigPath(cwd);
-  if (!configPath) {
+  const configPaths = await findConfigPaths(cwd);
+  if (configPaths.length === 0) {
     throw new Error(`Could not find an Ezorm config file in ${cwd}`);
   }
+  if (configPaths.length > 1) {
+    throw new Error(
+      `Found multiple Ezorm config files in ${cwd}: ${configPaths.map((path) => path.slice(cwd.length + 1)).join(", ")}`
+    );
+  }
+  const [configPath] = configPaths;
 
   const configModule = await loadConfigModule(`${pathToFileURL(configPath).href}?t=${Date.now()}`);
   const config = configModule.default;
@@ -291,17 +304,20 @@ async function loadCliConfig(cwd: string): Promise<LoadedCliConfig> {
   };
 }
 
-async function findConfigPath(cwd: string): Promise<string | undefined> {
-  for (const filename of CONFIG_FILENAMES) {
-    const configPath = resolve(cwd, filename);
-    try {
-      await readFile(configPath, "utf8");
-      return configPath;
-    } catch {
-      continue;
-    }
-  }
-  return undefined;
+async function findConfigPaths(cwd: string): Promise<string[]> {
+  const configPaths = await Promise.all(
+    CONFIG_FILENAMES.map(async (filename) => {
+      const configPath = resolve(cwd, filename);
+      try {
+        await access(configPath);
+        return configPath;
+      } catch {
+        return undefined;
+      }
+    })
+  );
+
+  return configPaths.filter((path): path is string => typeof path === "string");
 }
 
 async function readMigrationState(

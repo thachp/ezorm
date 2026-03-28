@@ -1,6 +1,7 @@
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { Field, Index, Model, PrimaryKey } from "@ezorm/core";
@@ -8,6 +9,7 @@ import { main, parseCliCommand } from "./index";
 
 const originalCwd = process.cwd();
 const tempDirectories: string[] = [];
+let cliBuildPrepared = false;
 
 @Model({ table: "todos" })
 @Index(["title"], { name: "todos_title_idx" })
@@ -135,6 +137,36 @@ describe("ezorm CLI", () => {
     expect(await main(["migrate", "status"], io, { cwd: directory })).toBe(0);
     expect(io.logs.join("\n")).toContain(`Pending migrations: ${manualMigration}`);
   });
+
+  it("loads decorator-authored TypeScript models from ezorm.config.ts via the published bin path", async () => {
+    await ensureCliBuild();
+    const directory = await createTypeScriptCliWorkspace();
+
+    const pushResult = runCliBinary(["db", "push"], directory);
+    expect(pushResult.status).toBe(0);
+    expect(pushResult.stdout).toContain('CREATE TABLE IF NOT EXISTS "todos"');
+    expect(pushResult.stdout).toContain('CREATE INDEX IF NOT EXISTS "todos_title_idx"');
+
+    const rerunResult = runCliBinary(["db", "push"], directory);
+    expect(rerunResult.status).toBe(0);
+    expect(rerunResult.stdout).toContain("Schema is up to date.");
+  });
+
+  it("fails clearly when multiple config files are present", async () => {
+    const directory = await createCliWorkspace();
+    const io = createIo();
+
+    await writeFile(
+      join(directory, "ezorm.config.ts"),
+      "export default globalThis.__EZORM_TEST_CONFIG__;\n",
+      "utf8"
+    );
+
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(1);
+    expect(io.errors.join("\n")).toContain("Found multiple Ezorm config files");
+    expect(io.errors.join("\n")).toContain("ezorm.config.ts");
+    expect(io.errors.join("\n")).toContain("ezorm.config.mjs");
+  });
 });
 
 async function createCliWorkspace(): Promise<string> {
@@ -153,6 +185,84 @@ async function createCliWorkspace(): Promise<string> {
   );
 
   return directory;
+}
+
+async function createTypeScriptCliWorkspace(): Promise<string> {
+  const baseDirectory = join(originalCwd, "packages/cli/.tmp");
+  await mkdir(baseDirectory, { recursive: true });
+  const directory = await mkdtemp(join(baseDirectory, "ezorm-cli-ts-"));
+  tempDirectories.push(directory);
+
+  await writeFile(
+    join(directory, "tsconfig.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          experimentalDecorators: true
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    join(directory, "models.ts"),
+    [
+      'import { Field, Index, Model, PrimaryKey } from "@ezorm/core";',
+      "",
+      '@Model({ table: "todos" })',
+      '@Index(["title"], { name: "todos_title_idx" })',
+      "export class Todo {",
+      "  @PrimaryKey()",
+      "  @Field.string()",
+      "  id!: string;",
+      "",
+      "  @Field.string()",
+      "  title!: string;",
+      "}"
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    join(directory, "ezorm.config.ts"),
+    [
+      'import { Todo } from "./models.ts";',
+      "",
+      "export default {",
+      `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+      "  models: [Todo]",
+      "};"
+    ].join("\n"),
+    "utf8"
+  );
+
+  return directory;
+}
+
+async function ensureCliBuild(): Promise<void> {
+  if (cliBuildPrepared) {
+    return;
+  }
+
+  const result = spawnSync("pnpm", ["--dir", "packages/cli", "run", "build"], {
+    cwd: originalCwd,
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || "Failed to build ezorm CLI package");
+  }
+
+  cliBuildPrepared = true;
+}
+
+function runCliBinary(argv: string[], cwd: string) {
+  return spawnSync(process.execPath, [join(originalCwd, "packages/cli/bin/ezorm.js"), ...argv], {
+    cwd,
+    encoding: "utf8"
+  });
 }
 
 function createIo() {

@@ -16,12 +16,25 @@ import type {
   ValidationIssue
 } from "./types.js";
 
-const registry = new Map<Function, ModelMetadata>();
+const REGISTRY_KEY = Symbol.for("ezorm.modelMetadataRegistry");
+const registry = getRegistry();
 type PendingRelation =
   | Omit<HasOneRelationMetadata, "name">
   | Omit<ManyToManyRelationMetadata, "name">
   | Omit<BelongsToRelationMetadata, "name">
   | Omit<HasManyRelationMetadata, "name">;
+
+function getRegistry(): Map<Function, ModelMetadata> {
+  const globalStore = globalThis as typeof globalThis & Record<symbol, unknown>;
+  const existing = globalStore[REGISTRY_KEY];
+  if (existing instanceof Map) {
+    return existing as Map<Function, ModelMetadata>;
+  }
+
+  const metadataRegistry = new Map<Function, ModelMetadata>();
+  globalStore[REGISTRY_KEY] = metadataRegistry;
+  return metadataRegistry;
+}
 
 function ensureModel(target: Function, options?: { kind?: ModelKind; table?: string }): ModelMetadata {
   const existing = registry.get(target);

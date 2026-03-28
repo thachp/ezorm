@@ -29,8 +29,8 @@ ezorm db push
 ## Config
 
 ```sh
-cat > ezorm.config.mjs <<'EOF'
-import { TodoModel } from "./models.js";
+cat > ezorm.config.ts <<'EOF'
+import { TodoModel } from "./models.ts";
 
 export default {
   databaseUrl: "sqlite:///tmp/ezorm.db",
@@ -38,6 +38,17 @@ export default {
 };
 EOF
 ```
+
+Supported config filenames:
+
+- `ezorm.config.ts`
+- `ezorm.config.mts`
+- `ezorm.config.cts`
+- `ezorm.config.mjs`
+- `ezorm.config.js`
+- `ezorm.config.cjs`
+
+TypeScript config files can import decorator-authored `.ts` model classes directly. JavaScript config files remain supported for precompiled projects that import `.js` output.
 
 `migrations/` is the default migration directory. Set `migrationsDir` in the config to override it.
 

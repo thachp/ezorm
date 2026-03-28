@@ -81,7 +81,7 @@ Current example workflows:
 - Query-scoped implicit lazy loading and projection `select()` are now intentional ORM features. Keep lazy relation properties scoped to `client.query(...)` results and keep `select()` in flat projection mode rather than mixing it into repository CRUD flows.
 - Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are cross-database features for the direct Node ORM. Do not claim the same for proxy-backed runtimes unless the proxy implementation has been updated too.
 - CLI and adapters should route through shared ORM client/repository helpers instead of embedding SQL logic inline.
-- The CLI migration workflow requires `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` exporting `databaseUrl`, `models`, and optional `migrationsDir`.
+- The CLI migration workflow requires a single `ezorm.config.ts`, `ezorm.config.mts`, `ezorm.config.cts`, `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` file exporting `databaseUrl`, `models`, and optional `migrationsDir`.
 
 ## Guardrails
 

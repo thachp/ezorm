@@ -158,6 +158,9 @@ The repository API is intentionally small in v1:
 
 The `ezorm` CLI uses a project-level config file named one of:
 
+- `ezorm.config.ts`
+- `ezorm.config.mts`
+- `ezorm.config.cts`
 - `ezorm.config.mjs`
 - `ezorm.config.js`
 - `ezorm.config.cjs`
@@ -170,8 +173,8 @@ The config must export:
 
 Example:
 
-```js
-import { Todo } from "./models.js";
+```ts
+import { Todo } from "./models.ts";
 
 export default {
   databaseUrl: "sqlite:///tmp/ezorm.db",
@@ -179,6 +182,8 @@ export default {
   migrationsDir: "migrations"
 };
 ```
+
+TypeScript config files can import decorator-authored `.ts` model classes directly. The JavaScript config filenames remain supported for projects that already compile their models to `.js`.
 
 Current CLI commands:
 
