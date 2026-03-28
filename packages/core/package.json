@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Decorator-based model metadata and validation primitives for Ezorm.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thachp/ezorm"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

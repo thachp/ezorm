@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Next.js adapters for direct Ezorm node clients and proxy-backed edge clients.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thachp/ezorm"
+  },
   "type": "module",
   "dependencies": {
     "@ezorm/orm": "0.1.0",

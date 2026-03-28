@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Ezorm CLI for migrations and database workflows.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thachp/ezorm"
+  },
   "type": "module",
   "bin": {
     "ezorm": "./bin/ezorm.js"

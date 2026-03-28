@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Prebuilt ezorm_proxy binary for aarch64-unknown-linux-gnu.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thachp/ezorm"
+  },
   "os": ["linux"],
   "cpu": ["arm64"],
   "bin": {

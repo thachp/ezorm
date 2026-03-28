@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "NestJS DI adapter for Ezorm ORM clients and repositories.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thachp/ezorm"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
