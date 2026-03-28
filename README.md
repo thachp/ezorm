@@ -187,6 +187,6 @@ The maintained examples live here:
 - Next.js Tailwind todo frontend: [`examples/apps/next-todo-web`](/Users/thachp/repos/sqlmodel-ts/examples/apps/next-todo-web)
 - Shared todo domain code: [`examples/packages/todo-domain`](/Users/thachp/repos/sqlmodel-ts/examples/packages/todo-domain)
 
-## Legacy CQRS/Event Packages
+## Notes
 
-`@ezorm/cqrs` and `@ezorm/events` still exist in the workspace, but they are no longer the primary product path. New examples, docs, and maintained workflows should start with `@ezorm/core` + `@ezorm/orm`.
+The maintained product path is `@ezorm/core` + `@ezorm/orm`. The examples, adapters, and CLI in this repository are intentionally centered on simple ORM-style CRUD workflows.

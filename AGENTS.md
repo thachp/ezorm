@@ -70,7 +70,7 @@ Current example workflows:
 
 - Do not document commands or queries that are not implemented in code.
 - Do not document manual Cargo proxy startup as the default edge or remote runtime workflow when the managed Node launcher covers the same path.
-- Keep docs aligned with the ORM-first surface. Do not reintroduce CQRS/event-sourcing as the primary workflow in maintained examples or top-level documentation.
+- Keep docs aligned with the ORM-first surface. Do not reintroduce alternate non-ORM workflows into maintained examples or top-level documentation.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
 - Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.
 - The todo examples intentionally default to SQLite in-memory storage in v1, so docs should note that Nest restarts clear state.

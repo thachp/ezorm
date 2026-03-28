@@ -17,7 +17,6 @@
     "paths": {
       "@ezorm/core": ["packages/core/src/index.ts"],
       "@ezorm/orm": ["packages/orm/src/index.ts"],
-      "@ezorm/cqrs": ["packages/cqrs/src/index.ts"],
       "@ezorm/events": ["packages/events/src/index.ts"],
       "@ezorm/proxy-node": ["packages/proxy-node/src/index.ts"],
       "@ezorm/runtime-node": ["packages/runtime-node/src/index.ts"],
