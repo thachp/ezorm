@@ -13,14 +13,22 @@ const TYPESCRIPT_CONFIG_FILENAMES = [
   "ezorm.config.cts"
 ];
 
-if (hasTypeScriptConfig(process.cwd())) {
+if (shouldRunWithTsx(process.cwd(), process.argv.slice(2))) {
   process.exitCode = runWithTsx();
 } else {
   process.exitCode = await main(process.argv.slice(2));
 }
 
+function shouldRunWithTsx(cwd, argv) {
+  return argv[0] === "init" || hasTypeScriptConfig(cwd) || hasTypeScriptProject(cwd);
+}
+
 function hasTypeScriptConfig(cwd) {
   return TYPESCRIPT_CONFIG_FILENAMES.some((filename) => existsSync(resolve(cwd, filename)));
+}
+
+function hasTypeScriptProject(cwd) {
+  return existsSync(resolve(cwd, "tsconfig.json"));
 }
 
 function runWithTsx() {

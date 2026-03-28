@@ -168,26 +168,30 @@ The `ezorm` CLI uses a project-level config file named one of:
 The config must export:
 
 - `databaseUrl`
-- `models`
+- optional `models`
+- optional `modelPaths`
 - optional `migrationsDir`
 
 Example:
 
 ```ts
-import { Todo } from "./models.ts";
-
 export default {
   databaseUrl: "sqlite:///tmp/ezorm.db",
-  models: [Todo],
+  modelPaths: ["src"],
   migrationsDir: "migrations"
 };
 ```
 
-TypeScript config files can import decorator-authored `.ts` model classes directly. The JavaScript config filenames remain supported for projects that already compile their models to `.js`.
+If `models` is omitted, the CLI scans `modelPaths` and imports files containing `@Model` or `Model(...)` before deriving schema metadata. Explicit `models` still override scan mode.
+
+Use `npx ezorm init` to scaffold the config in the nearest package root, add a minimal Todo model when the project does not already have one, and patch `tsconfig.json` for decorator support in TypeScript projects.
+
+TypeScript config files can still import decorator-authored `.ts` model classes directly. JavaScript config files remain supported for ESM and CommonJS projects.
 
 Current CLI commands:
 
 ```text
+ezorm init [--ts|--js]
 ezorm migrate generate [name]
 ezorm migrate apply
 ezorm migrate status
@@ -200,6 +204,7 @@ ezorm db push
 Typical workflow:
 
 ```sh
+npx ezorm init
 npx ezorm migrate generate init
 npx ezorm migrate apply
 npx ezorm migrate status
@@ -209,6 +214,7 @@ npx ezorm db push
 
 Command behavior today:
 
+- `init` writes `ezorm.config.*`, adds an example Todo model when needed, and patches TypeScript decorator compiler flags for TS scaffolds.
 - `migrate generate` writes additive SQL migration files.
 - `migrate apply` executes pending migration files and records them in `_ezorm_migrations`.
 - `migrate status` shows migration state.

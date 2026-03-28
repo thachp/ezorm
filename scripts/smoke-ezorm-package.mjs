@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,11 +49,17 @@ function runNpmInstallSmoke() {
   run("npm", ["init", "-y"], installWorkspace);
   run("npm", ["install", coreTarballPath, ormTarballPath, tarballPath], installWorkspace);
   assertOutput(run("npx", ["ezorm", "--help"], installWorkspace).stdout, "Usage:", "npm install smoke test");
-  writeTypeScriptCliFixture(installWorkspace);
+  assertOutput(run("npx", ["ezorm", "init", "--ts"], installWorkspace).stdout, "Created ezorm.config.ts", "npm init smoke test");
+  assert(existsSync(resolve(installWorkspace, "models/todo.ts")), "npm init should create a TypeScript todo model");
+  assertOutput(
+    readFileSync(resolve(installWorkspace, "tsconfig.json"), "utf8"),
+    '"emitDecoratorMetadata": true',
+    "npm init should patch tsconfig"
+  );
   assertOutput(
     run("npx", ["ezorm", "db", "push"], installWorkspace).stdout,
     'CREATE TABLE IF NOT EXISTS "todos"',
-    "npm install TypeScript config smoke test"
+    "npm install TypeScript scan fallback smoke test"
   );
 }
 
@@ -87,11 +93,16 @@ function runPnpmAddSmoke() {
     "Usage:",
     "pnpm add smoke test"
   );
-  writeTypeScriptCliFixture(installWorkspace);
+  assertOutput(
+    run("pnpm", ["exec", "ezorm", "init", "--js"], installWorkspace).stdout,
+    "Created ezorm.config.cjs",
+    "pnpm init js smoke test"
+  );
+  assert(existsSync(resolve(installWorkspace, "models/todo.js")), "pnpm init --js should create a JavaScript todo model");
   assertOutput(
     run("pnpm", ["exec", "ezorm", "db", "push"], installWorkspace).stdout,
     'CREATE TABLE IF NOT EXISTS "todos"',
-    "pnpm add TypeScript config smoke test"
+    "pnpm add JavaScript scan fallback smoke test"
   );
 }
 
@@ -143,49 +154,10 @@ function assertOutput(actual, expected, label) {
   }
 }
 
-function writeTypeScriptCliFixture(cwd) {
-  writeFileSync(
-    resolve(cwd, "tsconfig.json"),
-    `${JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "ESNext",
-          experimentalDecorators: true
-        }
-      },
-      null,
-      2
-    )}\n`
-  );
-  writeFileSync(
-    resolve(cwd, "models.ts"),
-    [
-      'import { Field, Index, Model, PrimaryKey } from "@ezorm/core";',
-      "",
-      '@Model({ table: "todos" })',
-      '@Index(["title"], { name: "todos_title_idx" })',
-      "export class TodoModel {",
-      "  @PrimaryKey()",
-      "  @Field.string()",
-      "  id!: string;",
-      "",
-      "  @Field.string()",
-      "  title!: string;",
-      "}"
-    ].join("\n")
-  );
-  writeFileSync(
-    resolve(cwd, "ezorm.config.ts"),
-    [
-      'import { TodoModel } from "./models.ts";',
-      "",
-      "export default {",
-      `  databaseUrl: ${JSON.stringify(`sqlite://${resolve(cwd, "app.sqlite")}`)},`,
-      "  models: [TodoModel]",
-      "};"
-    ].join("\n")
-  );
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
 }
 
 function parsePackOutput(stdout) {

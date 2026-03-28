@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { getModelMetadata } from "@ezorm/core";
+import { getModelMetadata, listModelMetadata } from "@ezorm/core";
 import {
   connectRelationalAdapter,
   deriveModelSchemas,
@@ -11,7 +11,8 @@ import {
   type SqlDialect,
   type TableSchema
 } from "@ezorm/orm";
-import type { CliCommand, EzormCliConfig } from "./index.js";
+import ts from "typescript";
+import type { CliCommand, EzormCliConfig, InitCliOptions } from "./index.js";
 
 const CONFIG_FILENAMES = [
   "ezorm.config.ts",
@@ -22,6 +23,22 @@ const CONFIG_FILENAMES = [
   "ezorm.config.cjs"
 ] as const;
 const MIGRATION_HISTORY_TABLE = "_ezorm_migrations";
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const EXCLUDED_DIRECTORIES = new Set([
+  ".next",
+  "__tests__",
+  "build",
+  "coverage",
+  "dist",
+  "migrations",
+  "node_modules",
+  "target"
+]);
+const MODEL_PREFILTER_PATTERNS = ["@Model", "Model("];
+const DEFAULT_DATABASE_URL = "sqlite://./ezorm.db";
+
+type ScaffoldLanguage = "ts" | "js";
+type ModuleStyle = "esm" | "cjs";
 
 async function loadConfigModule(specifier: string): Promise<{ default?: EzormCliConfig }> {
   return import(/* @vite-ignore */ specifier);
@@ -31,6 +48,16 @@ interface LoadedCliConfig extends EzormCliConfig {
   cwd: string;
   configPath: string;
   migrationsDir: string;
+  models: Function[];
+}
+
+interface InitScaffoldResult {
+  configPath: string;
+  projectRoot: string;
+  createdModelPath?: string;
+  tsconfigPath?: string;
+  tsconfigStatus?: "created" | "updated";
+  existingModelFiles: string[];
 }
 
 interface MigrationFile {
@@ -62,6 +89,9 @@ export async function executeCliCommand(
   const cwd = options?.cwd ?? process.cwd();
 
   switch (command[0]) {
+    case "init":
+      await runInit(command[1], io, cwd);
+      return;
     case "db":
       if (command[1] === "pull") {
         await runDbPull(io, cwd);
@@ -85,6 +115,27 @@ export async function executeCliCommand(
       await runMigrateResolve(command[2], command[3], io, cwd);
       return;
   }
+}
+
+async function runInit(
+  initOptions: InitCliOptions,
+  io: Pick<Console, "log">,
+  cwd: string
+): Promise<void> {
+  const result = await createInitScaffold(cwd, initOptions);
+
+  io.log(`Created ${relative(result.projectRoot, result.configPath) || result.configPath}`);
+  if (result.createdModelPath) {
+    io.log(`Created ${relative(result.projectRoot, result.createdModelPath)}`);
+  } else if (result.existingModelFiles.length > 0) {
+    io.log(`Detected existing model files: ${result.existingModelFiles.join(", ")}`);
+  }
+  if (result.tsconfigPath && result.tsconfigStatus) {
+    io.log(`${capitalize(result.tsconfigStatus)} ${relative(result.projectRoot, result.tsconfigPath)}`);
+  }
+  io.log("Next steps:");
+  io.log("  ezorm migrate generate init");
+  io.log("  ezorm migrate apply");
 }
 
 async function runDbPull(io: Pick<Console, "log">, cwd: string): Promise<void> {
@@ -288,10 +339,12 @@ async function loadCliConfig(cwd: string): Promise<LoadedCliConfig> {
   if (typeof config.databaseUrl !== "string" || config.databaseUrl.trim().length === 0) {
     throw new Error(`Config ${configPath} must define a non-empty databaseUrl`);
   }
-  if (!Array.isArray(config.models) || config.models.length === 0) {
-    throw new Error(`Config ${configPath} must define a non-empty models array`);
-  }
-  for (const model of config.models) {
+  const models =
+    Array.isArray(config.models) && config.models.length > 0
+      ? config.models
+      : await discoverModelsFromConfig(configPath, config.modelPaths);
+
+  for (const model of models) {
     getModelMetadata(model);
   }
 
@@ -299,8 +352,9 @@ async function loadCliConfig(cwd: string): Promise<LoadedCliConfig> {
     ...config,
     cwd,
     configPath,
+    models,
     databaseUrl: config.databaseUrl.trim(),
-    migrationsDir: resolve(cwd, config.migrationsDir ?? "migrations")
+    migrationsDir: resolve(dirname(configPath), config.migrationsDir ?? "migrations")
   };
 }
 
@@ -518,6 +572,375 @@ function slugify(value: string): string {
 
 function pad(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+async function createInitScaffold(
+  cwd: string,
+  initOptions: InitCliOptions
+): Promise<InitScaffoldResult> {
+  const projectRoot = await findNearestPackageRoot(cwd);
+  const existingConfigs = await findConfigPaths(projectRoot);
+  if (existingConfigs.length > 0) {
+    throw new Error(
+      `Found existing Ezorm config file${existingConfigs.length > 1 ? "s" : ""} in ${projectRoot}: ${existingConfigs
+        .map((configPath) => relative(projectRoot, configPath))
+        .join(", ")}`
+    );
+  }
+
+  const hasSrcDirectory = await directoryExists(resolve(projectRoot, "src"));
+  const existingModelFiles = await findModelSourceFiles(projectRoot, ["."], SOURCE_EXTENSIONS);
+  const language = await determineScaffoldLanguage(projectRoot, initOptions.language);
+  const moduleStyle = language === "js" ? await detectJavaScriptModuleStyle(projectRoot) : "esm";
+  const configPath = resolve(projectRoot, scaffoldConfigFilename(language, moduleStyle));
+  const modelPaths = [hasSrcDirectory ? "src" : "."];
+
+  let tsconfigResult: { path: string; status: "created" | "updated" } | undefined;
+  if (language === "ts") {
+    tsconfigResult = await ensureTypeScriptConfig(projectRoot);
+  }
+
+  let createdModelPath: string | undefined;
+  if (existingModelFiles.length === 0) {
+    createdModelPath = await createExampleTodoModel(projectRoot, language, moduleStyle, hasSrcDirectory);
+  }
+
+  await writeFile(configPath, renderConfigFile(language, moduleStyle, modelPaths), "utf8");
+
+  return {
+    configPath,
+    projectRoot,
+    createdModelPath,
+    existingModelFiles: existingModelFiles.map((filePath) => relative(projectRoot, filePath)),
+    tsconfigPath: tsconfigResult?.path,
+    tsconfigStatus: tsconfigResult?.status
+  };
+}
+
+async function discoverModelsFromConfig(configPath: string, modelPaths?: string[]): Promise<Function[]> {
+  const configDir = dirname(configPath);
+  const configuredPaths = normalizeModelPaths(modelPaths);
+  const scanRoots = configuredPaths.length > 0 ? configuredPaths : await defaultModelPaths(configDir);
+  const candidateFiles = await findModelSourceFiles(configDir, scanRoots, SOURCE_EXTENSIONS);
+
+  if (candidateFiles.length === 0) {
+    throw new Error(
+      `Config ${configPath} must define a non-empty models array or discoverable model files under ${scanRoots.join(", ")}`
+    );
+  }
+
+  const existingTargets = new Set(listModelMetadata().map((metadata) => metadata.target));
+  let importCounter = 0;
+  for (const filePath of candidateFiles) {
+    try {
+      await import(/* @vite-ignore */ `${pathToFileURL(filePath).href}?scan=${Date.now()}-${importCounter++}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to load model source ${filePath}: ${message}`);
+    }
+  }
+
+  const discovered = listModelMetadata()
+    .filter((metadata) => !existingTargets.has(metadata.target))
+    .map((metadata) => metadata.target);
+
+  if (discovered.length === 0) {
+    throw new Error(
+      `Config ${configPath} did not discover any models from ${scanRoots.join(
+        ", "
+      )}. Add models to the config or create files containing @Model.`
+    );
+  }
+
+  return discovered;
+}
+
+function normalizeModelPaths(modelPaths?: string[]): string[] {
+  if (!Array.isArray(modelPaths)) {
+    return [];
+  }
+
+  return modelPaths
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0);
+}
+
+async function defaultModelPaths(projectRoot: string): Promise<string[]> {
+  return (await directoryExists(resolve(projectRoot, "src"))) ? ["src"] : ["."];
+}
+
+async function findModelSourceFiles(
+  baseDir: string,
+  relativeRoots: string[],
+  allowedExtensions: Set<string>
+): Promise<string[]> {
+  const matches = new Set<string>();
+
+  for (const relativeRoot of relativeRoots) {
+    const rootPath = resolve(baseDir, relativeRoot);
+    const rootStats = await stat(rootPath).catch(() => undefined);
+    if (!rootStats) {
+      continue;
+    }
+
+    if (rootStats.isDirectory()) {
+      await collectModelFiles(rootPath, allowedExtensions, matches);
+      continue;
+    }
+
+    if (rootStats.isFile() && allowedExtensions.has(extensionOf(rootPath))) {
+      const content = await readFile(rootPath, "utf8");
+      if (looksLikeModelSource(content) && !shouldExcludeFile(rootPath)) {
+        matches.add(rootPath);
+      }
+    }
+  }
+
+  return [...matches].sort((left, right) => left.localeCompare(right));
+}
+
+async function collectModelFiles(
+  directory: string,
+  allowedExtensions: Set<string>,
+  matches: Set<string>
+): Promise<void> {
+  const entries = await readdir(directory, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const entryPath = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (EXCLUDED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
+      await collectModelFiles(entryPath, allowedExtensions, matches);
+      continue;
+    }
+
+    if (!entry.isFile() || shouldExcludeFile(entry.name) || !allowedExtensions.has(extensionOf(entry.name))) {
+      continue;
+    }
+
+    const content = await readFile(entryPath, "utf8");
+    if (looksLikeModelSource(content)) {
+      matches.add(entryPath);
+    }
+  }
+}
+
+function looksLikeModelSource(content: string): boolean {
+  return MODEL_PREFILTER_PATTERNS.some((pattern) => content.includes(pattern));
+}
+
+function shouldExcludeFile(filePath: string): boolean {
+  return /\.test\.[^.]+$/.test(filePath) || /\.spec\.[^.]+$/.test(filePath);
+}
+
+function extensionOf(filePath: string): string {
+  const match = filePath.match(/(\.[^.]+)$/);
+  return match ? match[1] : "";
+}
+
+async function findNearestPackageRoot(cwd: string): Promise<string> {
+  let current = resolve(cwd);
+
+  while (true) {
+    if (await pathExists(resolve(current, "package.json"))) {
+      return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return resolve(cwd);
+    }
+    current = parent;
+  }
+}
+
+async function determineScaffoldLanguage(
+  projectRoot: string,
+  preferredLanguage?: ScaffoldLanguage
+): Promise<ScaffoldLanguage> {
+  if (preferredLanguage) {
+    return preferredLanguage;
+  }
+
+  return (await pathExists(resolve(projectRoot, "tsconfig.json"))) ? "ts" : "js";
+}
+
+async function detectJavaScriptModuleStyle(projectRoot: string): Promise<ModuleStyle> {
+  const packagePath = resolve(projectRoot, "package.json");
+  const content = await readFile(packagePath, "utf8").catch(() => undefined);
+  if (!content) {
+    return "cjs";
+  }
+
+  try {
+    const packageJson = JSON.parse(content) as { type?: string };
+    return packageJson.type === "module" ? "esm" : "cjs";
+  } catch {
+    return "cjs";
+  }
+}
+
+function scaffoldConfigFilename(language: ScaffoldLanguage, moduleStyle: ModuleStyle): string {
+  if (language === "ts") {
+    return "ezorm.config.ts";
+  }
+
+  return moduleStyle === "esm" ? "ezorm.config.mjs" : "ezorm.config.cjs";
+}
+
+function renderConfigFile(
+  language: ScaffoldLanguage,
+  moduleStyle: ModuleStyle,
+  modelPaths: string[]
+): string {
+  const objectLiteral = [
+    "{",
+    `  databaseUrl: ${JSON.stringify(DEFAULT_DATABASE_URL)},`,
+    `  modelPaths: ${JSON.stringify(modelPaths)}`,
+    "}"
+  ].join("\n");
+
+  if (language === "ts" || moduleStyle === "esm") {
+    return `export default ${objectLiteral};\n`;
+  }
+
+  return `module.exports = ${objectLiteral};\n`;
+}
+
+async function createExampleTodoModel(
+  projectRoot: string,
+  language: ScaffoldLanguage,
+  moduleStyle: ModuleStyle,
+  hasSrcDirectory: boolean
+): Promise<string> {
+  const modelPath = hasSrcDirectory
+    ? resolve(projectRoot, "src", "models", language === "ts" ? "todo.ts" : "todo.js")
+    : resolve(projectRoot, "models", language === "ts" ? "todo.ts" : "todo.js");
+
+  if (await pathExists(modelPath)) {
+    throw new Error(`Refusing to overwrite existing scaffold file ${modelPath}`);
+  }
+
+  await mkdir(dirname(modelPath), { recursive: true });
+  await writeFile(modelPath, renderTodoModel(language, moduleStyle), "utf8");
+  return modelPath;
+}
+
+function renderTodoModel(language: ScaffoldLanguage, moduleStyle: ModuleStyle): string {
+  if (language === "ts") {
+    return [
+      'import { Field, Model, PrimaryKey } from "@ezorm/core";',
+      "",
+      '@Model({ table: "todos" })',
+      "export class Todo {",
+      "  @PrimaryKey()",
+      "  @Field.string()",
+      "  id!: string;",
+      "",
+      "  @Field.string()",
+      "  title!: string;",
+      "}"
+    ].join("\n") + "\n";
+  }
+
+  if (moduleStyle === "esm") {
+    return [
+      'import { Field, Model, PrimaryKey } from "@ezorm/core";',
+      "",
+      "class Todo {}",
+      "",
+      'Field.string()(Todo.prototype, "id");',
+      'PrimaryKey()(Todo.prototype, "id");',
+      'Field.string()(Todo.prototype, "title");',
+      'Model({ table: "todos" })(Todo);',
+      "",
+      "export { Todo };"
+    ].join("\n") + "\n";
+  }
+
+  return [
+    'const { Field, Model, PrimaryKey } = require("@ezorm/core");',
+    "",
+    "class Todo {}",
+    "",
+    'Field.string()(Todo.prototype, "id");',
+    'PrimaryKey()(Todo.prototype, "id");',
+    'Field.string()(Todo.prototype, "title");',
+    'Model({ table: "todos" })(Todo);',
+    "",
+    "module.exports = { Todo };"
+  ].join("\n") + "\n";
+}
+
+async function ensureTypeScriptConfig(
+  projectRoot: string
+): Promise<{ path: string; status: "created" | "updated" } | undefined> {
+  const tsconfigPath = resolve(projectRoot, "tsconfig.json");
+  const existing = await readFile(tsconfigPath, "utf8").catch(() => undefined);
+
+  if (!existing) {
+    const config = {
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true
+      }
+    };
+    await writeJsonFile(tsconfigPath, config);
+    return { path: tsconfigPath, status: "created" };
+  }
+
+  const parsed = ts.parseConfigFileTextToJson(tsconfigPath, existing);
+  if (parsed.error) {
+    throw new Error(`Could not parse ${tsconfigPath}: ${parsed.error.messageText}`);
+  }
+
+  const config = (parsed.config ?? {}) as { compilerOptions?: Record<string, unknown> };
+  const compilerOptions = { ...(config.compilerOptions ?? {}) };
+  const nextConfig = { ...config, compilerOptions };
+  let changed = false;
+
+  if (compilerOptions.experimentalDecorators !== true) {
+    compilerOptions.experimentalDecorators = true;
+    changed = true;
+  }
+  if (compilerOptions.emitDecoratorMetadata !== true) {
+    compilerOptions.emitDecoratorMetadata = true;
+    changed = true;
+  }
+
+  if (!changed) {
+    return undefined;
+  }
+
+  await writeJsonFile(tsconfigPath, nextConfig);
+  return { path: tsconfigPath, status: "updated" };
+}
+
+async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function directoryExists(directoryPath: string): Promise<boolean> {
+  const directoryStats = await stat(directoryPath).catch(() => undefined);
+  return Boolean(directoryStats?.isDirectory());
+}
+
+function capitalize(value: string): string {
+  return `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 }
 
 function formatBlockedChanges(changes: string[]): string {

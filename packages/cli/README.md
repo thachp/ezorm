@@ -17,6 +17,7 @@ npm install ezorm
 ## Commands
 
 ```text
+ezorm init [--ts|--js]
 ezorm migrate generate [name]
 ezorm migrate apply
 ezorm migrate status
@@ -28,15 +29,10 @@ ezorm db push
 
 ## Config
 
-```sh
-cat > ezorm.config.ts <<'EOF'
-import { TodoModel } from "./models.ts";
+Start with the scaffold:
 
-export default {
-  databaseUrl: "sqlite:///tmp/ezorm.db",
-  models: [TodoModel]
-};
-EOF
+```sh
+npx ezorm init
 ```
 
 Supported config filenames:
@@ -48,13 +44,25 @@ Supported config filenames:
 - `ezorm.config.js`
 - `ezorm.config.cjs`
 
-TypeScript config files can import decorator-authored `.ts` model classes directly. JavaScript config files remain supported for precompiled projects that import `.js` output.
+Config files must export:
+
+- `databaseUrl`
+- optional `models`
+- optional `modelPaths`
+- optional `migrationsDir`
+
+When `models` is omitted, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives the schema from the discovered model metadata.
+
+TypeScript scaffolds write `ezorm.config.ts`, ensure `experimentalDecorators` and `emitDecoratorMetadata` are enabled in `tsconfig.json`, and create an example `Todo` model when the project does not already contain one.
+
+JavaScript scaffolds write `ezorm.config.mjs` for ESM packages and `ezorm.config.cjs` otherwise. The generated JavaScript Todo example uses direct decorator function calls so it can run without TypeScript syntax.
 
 `migrations/` is the default migration directory. Set `migrationsDir` in the config to override it.
 
 ## Example Workflow
 
 ```sh
+npx ezorm init
 npx ezorm migrate generate init
 npx ezorm migrate apply
 npx ezorm migrate status

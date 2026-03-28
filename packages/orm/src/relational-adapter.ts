@@ -332,7 +332,7 @@ function resolveSqliteFilename(databaseUrl: string): string {
   }
   if (databaseUrl.startsWith("sqlite://")) {
     const path = databaseUrl.slice("sqlite://".length);
-    return path.startsWith("/") ? path : `/${path}`;
+    return path;
   }
   throw new Error(`Unsupported database url for @ezorm/orm: ${databaseUrl}`);
 }

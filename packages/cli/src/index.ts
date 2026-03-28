@@ -4,11 +4,17 @@ import { executeCliCommand } from "./workflow.js";
 
 export interface EzormCliConfig {
   databaseUrl: string;
-  models: Function[];
+  models?: Function[];
+  modelPaths?: string[];
   migrationsDir?: string;
 }
 
+export interface InitCliOptions {
+  language?: "ts" | "js";
+}
+
 export type CliCommand =
+  | ["init", InitCliOptions]
   | ["migrate", "generate", string?]
   | ["migrate", "apply"]
   | ["migrate", "status"]
@@ -18,6 +24,7 @@ export type CliCommand =
 
 const HELP_TEXT = [
   "Usage:",
+  "  ezorm init [--ts|--js]",
   "  ezorm migrate generate [name]",
   "  ezorm migrate apply",
   "  ezorm migrate status",
@@ -36,6 +43,31 @@ class CliUsageError extends Error {
 
 export function parseCliCommand(argv: string[]): CliCommand {
   const [scope, action, argument] = argv;
+
+  if (scope === "init") {
+    const flags = argv.slice(1);
+    const options: InitCliOptions = {};
+
+    for (const flag of flags) {
+      if (flag === "--ts") {
+        if (options.language === "js") {
+          throw new CliUsageError("Init accepts either --ts or --js, not both");
+        }
+        options.language = "ts";
+        continue;
+      }
+      if (flag === "--js") {
+        if (options.language === "ts") {
+          throw new CliUsageError("Init accepts either --ts or --js, not both");
+        }
+        options.language = "js";
+        continue;
+      }
+      throw new CliUsageError(`Unknown init option: ${flag}`);
+    }
+
+    return ["init", options];
+  }
 
   if (scope === "migrate" && action === "generate") {
     return ["migrate", "generate", argument];

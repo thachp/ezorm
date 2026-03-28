@@ -34,6 +34,15 @@ afterEach(async () => {
 });
 
 describe("ezorm CLI", () => {
+  it("parses init commands", () => {
+    expect(parseCliCommand(["init"])).toEqual(["init", {}]);
+    expect(parseCliCommand(["init", "--ts"])).toEqual(["init", { language: "ts" }]);
+    expect(parseCliCommand(["init", "--js"])).toEqual(["init", { language: "js" }]);
+    expect(() => parseCliCommand(["init", "--ts", "--js"])).toThrow(
+      "Init accepts either --ts or --js, not both"
+    );
+  });
+
   it("parses resolve commands", () => {
     expect(parseCliCommand(["migrate", "resolve", "--applied", "001_init.sql"])).toEqual([
       "migrate",
@@ -167,6 +176,291 @@ describe("ezorm CLI", () => {
     expect(io.errors.join("\n")).toContain("ezorm.config.ts");
     expect(io.errors.join("\n")).toContain("ezorm.config.mjs");
   });
+
+  it("initializes a TypeScript project, patches tsconfig, and creates a todo model", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "init-ts", private: true },
+      tsconfig: {
+        extends: "./tsconfig.base.json",
+        compilerOptions: {
+          target: "ES2022",
+          experimentalDecorators: false
+        }
+      },
+      createSrcDirectory: true
+    });
+    const io = createIo();
+
+    expect(await main(["init"], io, { cwd: directory })).toBe(0);
+
+    const configContent = await readFile(join(directory, "ezorm.config.ts"), "utf8");
+    expect(configContent).toContain('databaseUrl: "sqlite://./ezorm.db"');
+    expect(configContent).toContain('modelPaths: ["src"]');
+
+    const modelContent = await readFile(join(directory, "src/models/todo.ts"), "utf8");
+    expect(modelContent).toContain('@Model({ table: "todos" })');
+    expect(modelContent).toContain("export class Todo");
+
+    const tsconfig = JSON.parse(await readFile(join(directory, "tsconfig.json"), "utf8")) as {
+      extends?: string;
+      compilerOptions?: Record<string, unknown>;
+    };
+    expect(tsconfig.extends).toBe("./tsconfig.base.json");
+    expect(tsconfig.compilerOptions?.experimentalDecorators).toBe(true);
+    expect(tsconfig.compilerOptions?.emitDecoratorMetadata).toBe(true);
+  });
+
+  it("initializes from a nested cwd at the nearest package root", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "nested-root", private: true },
+      tsconfig: {
+        compilerOptions: {
+          target: "ES2022"
+        }
+      },
+      createSrcDirectory: true
+    });
+    const nestedDirectory = join(directory, "src/features/todos");
+    await mkdir(nestedDirectory, { recursive: true });
+    const io = createIo();
+
+    expect(await main(["init"], io, { cwd: nestedDirectory })).toBe(0);
+    expect(await readFile(join(directory, "ezorm.config.ts"), "utf8")).toContain("modelPaths");
+  });
+
+  it("falls back to the exact cwd when no package root exists", async () => {
+    const directory = await createBareWorkspace();
+    const io = createIo();
+
+    expect(await main(["init", "--js"], io, { cwd: directory })).toBe(0);
+    expect(await readFile(join(directory, "ezorm.config.cjs"), "utf8")).toContain("module.exports");
+    expect(await readFile(join(directory, "models/todo.js"), "utf8")).toContain("module.exports = { Todo }");
+  });
+
+  it("uses package type to choose JavaScript scaffold style", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "init-js", private: true, type: "module" },
+      createSrcDirectory: true
+    });
+    const io = createIo();
+
+    expect(await main(["init", "--js"], io, { cwd: directory })).toBe(0);
+    expect(await readFile(join(directory, "ezorm.config.mjs"), "utf8")).toContain("export default");
+    expect(await readFile(join(directory, "src/models/todo.js"), "utf8")).toContain(
+      'import { Field, Model, PrimaryKey } from "@ezorm/core";'
+    );
+  });
+
+  it("does not create the example todo model when an existing model is present", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "existing-model", private: true },
+      tsconfig: {
+        compilerOptions: {
+          target: "ES2022"
+        }
+      },
+      createSrcDirectory: true
+    });
+    await writeFile(
+      join(directory, "src/existing-model.ts"),
+      [
+        'import { Field, Model, PrimaryKey } from "@ezorm/core";',
+        "",
+        '@Model({ table: "existing_todos" })',
+        "export class ExistingTodo {",
+        "  @PrimaryKey()",
+        "  @Field.string()",
+        "  id!: string;",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    const io = createIo();
+
+    expect(await main(["init"], io, { cwd: directory })).toBe(0);
+    expect(io.logs.join("\n")).toContain("Detected existing model files");
+    expect(await fileExists(join(directory, "src/models/todo.ts"))).toBe(false);
+  });
+
+  it("creates a tsconfig when TypeScript scaffolding is requested", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "create-tsconfig", private: true }
+    });
+    const io = createIo();
+
+    expect(await main(["init", "--ts"], io, { cwd: directory })).toBe(0);
+    const tsconfig = JSON.parse(await readFile(join(directory, "tsconfig.json"), "utf8")) as {
+      compilerOptions?: Record<string, unknown>;
+    };
+    expect(tsconfig.compilerOptions?.experimentalDecorators).toBe(true);
+    expect(tsconfig.compilerOptions?.emitDecoratorMetadata).toBe(true);
+  });
+
+  it("discovers TypeScript models when config.models is omitted", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "scan-ts", private: true },
+      tsconfig: {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          experimentalDecorators: true,
+          emitDecoratorMetadata: true
+        }
+      },
+      createSrcDirectory: true
+    });
+    const io = createIo();
+
+    await writeFile(
+      join(directory, "src/models.ts"),
+      [
+        'import { Field, Index, Model, PrimaryKey } from "@ezorm/core";',
+        "",
+        '@Model({ table: "todos" })',
+        '@Index(["title"], { name: "todos_title_idx" })',
+        "export class Todo {",
+        "  @PrimaryKey()",
+        "  @Field.string()",
+        "  id!: string;",
+        "",
+        "  @Field.string()",
+        "  title!: string;",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(directory, "ezorm.config.ts"),
+      [
+        "export default {",
+        `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+        '  modelPaths: ["src"]',
+        "};"
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(0);
+    expect(io.logs.join("\n")).toContain('CREATE TABLE IF NOT EXISTS "todos"');
+    expect(io.logs.join("\n")).toContain('CREATE INDEX IF NOT EXISTS "todos_title_idx"');
+  });
+
+  it("discovers JavaScript models when config.models is omitted", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "scan-js", private: true }
+    });
+    const io = createIo();
+
+    await mkdir(join(directory, "models"), { recursive: true });
+    await writeFile(
+      join(directory, "models/todo.js"),
+      [
+        'const { Field, Model, PrimaryKey } = require("@ezorm/core");',
+        "",
+        "class Todo {}",
+        "",
+        'Field.string()(Todo.prototype, "id");',
+        'PrimaryKey()(Todo.prototype, "id");',
+        'Field.string()(Todo.prototype, "title");',
+        'Model({ table: "todos" })(Todo);',
+        "",
+        "module.exports = { Todo };"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(directory, "ezorm.config.cjs"),
+      [
+        "module.exports = {",
+        `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+        '  modelPaths: ["."]',
+        "};"
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(0);
+    expect(io.logs.join("\n")).toContain('CREATE TABLE IF NOT EXISTS "todos"');
+  });
+
+  it("ignores excluded directories during scan fallback", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "scan-excludes", private: true }
+    });
+    const io = createIo();
+
+    await mkdir(join(directory, "src"), { recursive: true });
+    await mkdir(join(directory, "__tests__"), { recursive: true });
+    await writeFile(
+      join(directory, "src/todo.js"),
+      [
+        'const { Field, Model, PrimaryKey } = require("@ezorm/core");',
+        "",
+        "class Todo {}",
+        "",
+        'Field.string()(Todo.prototype, "id");',
+        'PrimaryKey()(Todo.prototype, "id");',
+        'Field.string()(Todo.prototype, "title");',
+        'Model({ table: "todos" })(Todo);',
+        "",
+        "module.exports = { Todo };"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(directory, "__tests__/ignored.js"),
+      [
+        'const { Field, Model, PrimaryKey } = require("@ezorm/core");',
+        "",
+        "class IgnoredTodo {}",
+        "",
+        'Field.string()(IgnoredTodo.prototype, "id");',
+        'PrimaryKey()(IgnoredTodo.prototype, "id");',
+        'Field.string()(IgnoredTodo.prototype, "title");',
+        'Model({ table: "ignored_todos" })(IgnoredTodo);',
+        "",
+        "module.exports = { IgnoredTodo };"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(directory, "ezorm.config.cjs"),
+      [
+        "module.exports = {",
+        `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+        '  modelPaths: ["."]',
+        "};"
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(0);
+    io.logs.length = 0;
+    expect(await main(["db", "pull"], io, { cwd: directory })).toBe(0);
+    expect(io.logs[0]).toContain('"todos"');
+    expect(io.logs[0]).not.toContain("ignored_todos");
+  });
+
+  it("fails clearly when scan fallback cannot find any models", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "scan-none", private: true }
+    });
+    const io = createIo();
+
+    await writeFile(
+      join(directory, "ezorm.config.cjs"),
+      [
+        "module.exports = {",
+        `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+        '  modelPaths: ["."]',
+        "};"
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(1);
+    expect(io.errors.join("\n")).toContain("discoverable model files");
+  });
 });
 
 async function createCliWorkspace(): Promise<string> {
@@ -184,6 +478,35 @@ async function createCliWorkspace(): Promise<string> {
     "utf8"
   );
 
+  return directory;
+}
+
+async function createWorkspaceRoot(options: {
+  packageJson?: Record<string, unknown>;
+  tsconfig?: Record<string, unknown>;
+  createSrcDirectory?: boolean;
+}): Promise<string> {
+  const baseDirectory = join(originalCwd, "packages/cli/.tmp");
+  await mkdir(baseDirectory, { recursive: true });
+  const directory = await mkdtemp(join(baseDirectory, "ezorm-init-"));
+  tempDirectories.push(directory);
+
+  if (options.packageJson) {
+    await writeFile(join(directory, "package.json"), `${JSON.stringify(options.packageJson, null, 2)}\n`, "utf8");
+  }
+  if (options.tsconfig) {
+    await writeFile(join(directory, "tsconfig.json"), `${JSON.stringify(options.tsconfig, null, 2)}\n`, "utf8");
+  }
+  if (options.createSrcDirectory) {
+    await mkdir(join(directory, "src"), { recursive: true });
+  }
+
+  return directory;
+}
+
+async function createBareWorkspace(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "ezorm-init-bare-"));
+  tempDirectories.push(directory);
   return directory;
 }
 
@@ -276,4 +599,13 @@ function createIo() {
       this.errors.push(String(message ?? ""));
     }
   };
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await readFile(filePath, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
 }

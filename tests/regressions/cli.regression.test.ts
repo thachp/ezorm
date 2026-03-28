@@ -3,6 +3,7 @@ import { formatCliHelp, parseCliCommand } from "ezorm";
 
 describe("regression: cli-routing", () => {
   it("parses the ORM-first command surface consistently", () => {
+    expect(parseCliCommand(["init", "--ts"])).toEqual(["init", { language: "ts" }]);
     expect(parseCliCommand(["db", "push"])).toEqual(["db", "push"]);
     expect(parseCliCommand(["migrate", "status"])).toEqual(["migrate", "status"]);
     expect(parseCliCommand(["migrate", "resolve", "--applied", "001_init.sql"])).toEqual([
@@ -14,6 +15,7 @@ describe("regression: cli-routing", () => {
   });
 
   it("documents the ezorm command surface", () => {
+    expect(formatCliHelp()).toContain("ezorm init [--ts|--js]");
     expect(formatCliHelp()).toContain("ezorm migrate status");
     expect(formatCliHelp()).toContain("ezorm migrate resolve --applied <filename>");
     expect(formatCliHelp()).toContain("ezorm db push");
