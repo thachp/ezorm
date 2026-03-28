@@ -137,25 +137,27 @@ impl From<OrmRuntimeError> for ProxyHttpError {
             OrmRuntimeError::UnsupportedDatabaseUrl(database_url) => {
                 Self::BadRequest(format!("unsupported database url `{database_url}`"))
             }
+            OrmRuntimeError::InvalidMssqlDatabaseUrl(database_url) => {
+                Self::BadRequest(format!("invalid mssql database url `{database_url}`"))
+            }
             OrmRuntimeError::UnsupportedDialect(dialect) => {
                 Self::BadRequest(format!("unsupported database dialect `{dialect}`"))
             }
             OrmRuntimeError::RecordNotFound(record_id) => {
                 Self::NotFound(format!("record `{record_id}` does not exist"))
             }
-            OrmRuntimeError::InvalidPrimaryKey(model) => {
-                Self::BadRequest(format!(
-                    "model `{model}` must declare exactly one primary key field"
-                ))
-            }
-            OrmRuntimeError::UnknownField { model, field } => {
-                Self::BadRequest(format!("model `{model}` references unknown field `{field}`"))
-            }
-            OrmRuntimeError::UnknownRelationTarget { model, target } => {
-                Self::BadRequest(format!(
-                    "model `{model}` references unknown relation target `{target}`"
-                ))
-            }
+            OrmRuntimeError::InvalidPrimaryKey(model) => Self::BadRequest(format!(
+                "model `{model}` must declare exactly one primary key field"
+            )),
+            OrmRuntimeError::UnknownField { model, field } => Self::BadRequest(format!(
+                "model `{model}` references unknown field `{field}`"
+            )),
+            OrmRuntimeError::UnknownRelationTarget { model, target } => Self::BadRequest(format!(
+                "model `{model}` references unknown relation target `{target}`"
+            )),
+            OrmRuntimeError::Mssql(error) => Self::Internal(error.to_string()),
+            OrmRuntimeError::MssqlManager(error) => Self::Internal(error.to_string()),
+            OrmRuntimeError::MssqlPool(error) => Self::Internal(error.to_string()),
             OrmRuntimeError::Sqlx(error) => Self::Internal(error.to_string()),
             OrmRuntimeError::Serde(error) => Self::Internal(error.to_string()),
         }
@@ -186,7 +188,10 @@ async fn orm_find_by_id(
     payload: Result<Json<OrmFindByIdRequest>, JsonRejection>,
 ) -> Result<Json<Option<serde_json::Map<String, serde_json::Value>>>, ProxyHttpError> {
     let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let record = state.runtime.find_by_id(&payload.model, &payload.id).await?;
+    let record = state
+        .runtime
+        .find_by_id(&payload.model, &payload.id)
+        .await?;
     Ok(Json(record))
 }
 
@@ -195,7 +200,10 @@ async fn orm_find_many(
     payload: Result<Json<OrmFindManyRequest>, JsonRejection>,
 ) -> Result<Json<Vec<serde_json::Map<String, serde_json::Value>>>, ProxyHttpError> {
     let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let records = state.runtime.find_many(&payload.model, payload.options).await?;
+    let records = state
+        .runtime
+        .find_many(&payload.model, payload.options)
+        .await?;
     Ok(Json(records))
 }
 
@@ -349,7 +357,8 @@ mod tests {
             ))
             .await
             .unwrap();
-        let record: Option<serde_json::Map<String, serde_json::Value>> = read_json(find_response).await;
+        let record: Option<serde_json::Map<String, serde_json::Value>> =
+            read_json(find_response).await;
         let record = record.unwrap();
         assert_eq!(
             record.get("email"),
@@ -381,7 +390,8 @@ mod tests {
             ))
             .await
             .unwrap();
-        let deleted: Option<serde_json::Map<String, serde_json::Value>> = read_json(deleted_response).await;
+        let deleted: Option<serde_json::Map<String, serde_json::Value>> =
+            read_json(deleted_response).await;
         assert!(deleted.is_none());
 
         let pull_response = app
@@ -489,6 +499,67 @@ mod tests {
             find_many_body[0].get("email"),
             Some(&serde_json::Value::String("alice@example.com".into()))
         );
+    }
+
+    #[tokio::test]
+    async fn mssql_proxy_routes_run_when_configured() {
+        let Some(database_url) = std::env::var("EZORM_TEST_MSSQL_URL").ok() else {
+            return;
+        };
+        let app = create_proxy_app(&database_url, None).await.unwrap();
+        let model = user_model_metadata();
+
+        let push_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/schema/push",
+                json!({ "models": [model.clone()] }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(push_response.status(), StatusCode::OK);
+
+        let create_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/create",
+                json!({
+                    "model": model.clone(),
+                    "input": {
+                        "id": "ms_proxy_1",
+                        "email": "proxy-mssql@example.com",
+                        "active": true
+                    }
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(create_response.status(), StatusCode::NO_CONTENT);
+
+        let find_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/find-by-id",
+                json!({
+                    "model": model.clone(),
+                    "id": "ms_proxy_1"
+                }),
+            ))
+            .await
+            .unwrap();
+        let record: Option<serde_json::Map<String, serde_json::Value>> =
+            read_json(find_response).await;
+        assert_eq!(
+            record.unwrap().get("email"),
+            Some(&serde_json::Value::String("proxy-mssql@example.com".into()))
+        );
+
+        let pull_response = app
+            .oneshot(json_request("/orm/schema/pull", json!({})))
+            .await
+            .unwrap();
+        let schema: Vec<TableSchema> = read_json(pull_response).await;
+        assert!(schema.iter().any(|table| table.name == "users"));
     }
 
     fn json_request(path: &str, body: serde_json::Value) -> Request<Body> {

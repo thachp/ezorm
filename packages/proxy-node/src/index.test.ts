@@ -137,6 +137,30 @@ describe("@ezorm/proxy-node", () => {
     await handle.close();
   });
 
+  it("passes mssql connection urls through unchanged", async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true
+      })
+    );
+
+    const handle = await ensureEzormProxy({
+      databaseUrl: "sqlserver://user:pass@db.example.com/app?encrypt=true&trustServerCertificate=false",
+      port: 4630,
+      binaryPath: "/tmp/ezorm_proxy"
+    });
+
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { env: Record<string, string> }];
+    expect(spawnOptions.env.DATABASE_URL).toBe(
+      "sqlserver://user:pass@db.example.com/app?encrypt=true&trustServerCertificate=false"
+    );
+
+    await handle.close();
+  });
+
   it("times out cleanly when the proxy never becomes healthy", async () => {
     const child = new FakeChildProcess();
     spawnMock.mockReturnValue(child);

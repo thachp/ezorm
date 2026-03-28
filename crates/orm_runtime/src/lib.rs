@@ -1,5 +1,10 @@
-use std::{collections::{BTreeMap, HashMap}, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::Duration,
+};
 
+use bb8::Pool;
+use bb8_tiberius::ConnectionManager as MssqlConnectionManager;
 use ezorm_dialects::SqlDialect;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value};
@@ -11,6 +16,9 @@ use sqlx::{
     MySql, MySqlPool, PgPool, Postgres, Row, Sqlite, SqlitePool,
 };
 use thiserror::Error;
+use tiberius::{
+    AuthMethod, Config as MssqlConfig, EncryptionLevel, Query as MssqlQuery, Row as MssqlRow,
+};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -120,6 +128,14 @@ pub enum OrmRuntimeError {
     UnknownRelationTarget { model: String, target: String },
     #[error("record `{0}` does not exist")]
     RecordNotFound(String),
+    #[error("invalid mssql database url `{0}`")]
+    InvalidMssqlDatabaseUrl(String),
+    #[error(transparent)]
+    Mssql(#[from] tiberius::error::Error),
+    #[error(transparent)]
+    MssqlManager(#[from] bb8_tiberius::Error),
+    #[error(transparent)]
+    MssqlPool(#[from] bb8::RunError<bb8_tiberius::Error>),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
     #[error(transparent)]
@@ -137,6 +153,7 @@ enum RelationalPool {
     Sqlite(SqlitePool),
     Postgres(PgPool),
     Mysql(MySqlPool),
+    Mssql(Pool<MssqlConnectionManager>),
 }
 
 impl SqlOrmRuntime {
@@ -163,6 +180,14 @@ impl SqlOrmRuntime {
                 apply_mysql_pool_options(MySqlPoolOptions::new(), &pool_options)
                     .max_connections(pool_options.max_connections.unwrap_or(5))
                     .connect(database_url)
+                    .await?,
+            ),
+            SqlDialect::Mssql => RelationalPool::Mssql(
+                apply_mssql_pool_options(Pool::builder(), &pool_options)
+                    .max_size(pool_options.max_connections.unwrap_or(5))
+                    .build(MssqlConnectionManager::new(parse_mssql_config(
+                        database_url,
+                    )?))
                     .await?,
             ),
         };
@@ -206,6 +231,15 @@ impl SqlOrmRuntime {
                 }
                 query.execute(pool).await?;
             }
+            RelationalPool::Mssql(pool) => {
+                let mut query = MssqlQuery::new(sql);
+                for field in &model.fields {
+                    let value = input.get(&field.name).unwrap_or(&Value::Null);
+                    bind_mssql_query(&mut query, field, value)?;
+                }
+                let mut connection = pool.get().await?;
+                query.execute(&mut connection).await?;
+            }
         }
 
         Ok(())
@@ -226,9 +260,10 @@ impl SqlOrmRuntime {
 
         match &self.pool {
             RelationalPool::Sqlite(pool) => {
-                let row = bind_sqlite_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
-                    .fetch_optional(pool)
-                    .await?;
+                let row =
+                    bind_sqlite_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
+                        .fetch_optional(pool)
+                        .await?;
                 row.map(|item| row_to_value_sqlite(model, item)).transpose()
             }
             RelationalPool::Postgres(pool) => {
@@ -236,13 +271,29 @@ impl SqlOrmRuntime {
                     bind_postgres_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
                         .fetch_optional(pool)
                         .await?;
-                row.map(|item| row_to_value_postgres(model, item)).transpose()
+                row.map(|item| row_to_value_postgres(model, item))
+                    .transpose()
             }
             RelationalPool::Mysql(pool) => {
-                let row = bind_mysql_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
-                    .fetch_optional(pool)
-                    .await?;
+                let row =
+                    bind_mysql_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
+                        .fetch_optional(pool)
+                        .await?;
                 row.map(|item| row_to_value_mysql(model, item)).transpose()
+            }
+            RelationalPool::Mssql(pool) => {
+                let mut query = MssqlQuery::new(sql);
+                bind_mssql_query(&mut query, primary_key, &Value::String(id.into()))?;
+                let mut connection = pool.get().await?;
+                let rows = query
+                    .query(&mut connection)
+                    .await?
+                    .into_first_result()
+                    .await?;
+                rows.into_iter()
+                    .next()
+                    .map(|item| row_to_value_mssql(model, item))
+                    .transpose()
             }
         }
     }
@@ -257,7 +308,10 @@ impl SqlOrmRuntime {
             order_by: None,
         });
         let mut parameters = Vec::new();
-        let mut sql = format!("SELECT * FROM {}", quote_identifier(self.dialect, &model.table));
+        let mut sql = format!(
+            "SELECT * FROM {}",
+            quote_identifier(self.dialect, &model.table)
+        );
 
         if let Some(where_clause) = &options.where_clause {
             let mut predicates = Vec::new();
@@ -315,6 +369,21 @@ impl SqlOrmRuntime {
                 let rows = query.fetch_all(pool).await?;
                 rows.into_iter()
                     .map(|row| row_to_value_mysql(model, row))
+                    .collect()
+            }
+            RelationalPool::Mssql(pool) => {
+                let mut query = MssqlQuery::new(sql);
+                for (field_name, value) in &parameters {
+                    bind_mssql_query(&mut query, field_by_name(model, field_name)?, value)?;
+                }
+                let mut connection = pool.get().await?;
+                let rows = query
+                    .query(&mut connection)
+                    .await?
+                    .into_first_result()
+                    .await?;
+                rows.into_iter()
+                    .map(|row| row_to_value_mssql(model, row))
                     .collect()
             }
         }
@@ -380,6 +449,16 @@ impl SqlOrmRuntime {
                 query = bind_mysql_query(query, primary_key, &Value::String(id.into()))?;
                 query.execute(pool).await?.rows_affected()
             }
+            RelationalPool::Mssql(pool) => {
+                let mut query = MssqlQuery::new(sql);
+                for field in &fields {
+                    let value = input.get(&field.name).unwrap_or(&Value::Null);
+                    bind_mssql_query(&mut query, field, value)?;
+                }
+                bind_mssql_query(&mut query, primary_key, &Value::String(id.into()))?;
+                let mut connection = pool.get().await?;
+                query.execute(&mut connection).await?.total()
+            }
         };
 
         if affected_rows == 0 {
@@ -389,11 +468,7 @@ impl SqlOrmRuntime {
         Ok(())
     }
 
-    pub async fn delete(
-        &self,
-        model: &OrmModelMetadata,
-        id: &str,
-    ) -> Result<(), OrmRuntimeError> {
+    pub async fn delete(&self, model: &OrmModelMetadata, id: &str) -> Result<(), OrmRuntimeError> {
         let primary_key = primary_key_field(model)?;
         let sql = format!(
             "DELETE FROM {} WHERE {} = {}",
@@ -417,6 +492,12 @@ impl SqlOrmRuntime {
                 bind_mysql_query(sqlx::query(&sql), primary_key, &Value::String(id.into()))?
                     .execute(pool)
                     .await?;
+            }
+            RelationalPool::Mssql(pool) => {
+                let mut query = MssqlQuery::new(sql);
+                bind_mssql_query(&mut query, primary_key, &Value::String(id.into()))?;
+                let mut connection = pool.get().await?;
+                query.execute(&mut connection).await?;
             }
         }
 
@@ -445,6 +526,14 @@ impl SqlOrmRuntime {
                     sqlx::query(statement).execute(pool).await?;
                 }
             }
+            RelationalPool::Mssql(pool) => {
+                let mut connection = pool.get().await?;
+                for statement in &statements {
+                    MssqlQuery::new(statement.clone())
+                        .execute(&mut connection)
+                        .await?;
+                }
+            }
         }
 
         Ok(statements)
@@ -455,6 +544,7 @@ impl SqlOrmRuntime {
             RelationalPool::Sqlite(pool) => pull_schema_sqlite(pool).await,
             RelationalPool::Postgres(pool) => pull_schema_postgres(pool).await,
             RelationalPool::Mysql(pool) => pull_schema_mysql(pool).await,
+            RelationalPool::Mssql(pool) => pull_schema_mssql(pool).await,
         }
     }
 }
@@ -507,18 +597,108 @@ fn apply_mysql_pool_options(
     options
 }
 
+fn apply_mssql_pool_options(
+    mut builder: bb8::Builder<MssqlConnectionManager>,
+    pool_options: &RelationalPoolOptions,
+) -> bb8::Builder<MssqlConnectionManager> {
+    if let Some(min) = pool_options.min_connections {
+        builder = builder.min_idle(Some(min));
+    }
+    if let Some(timeout) = pool_options.acquire_timeout_ms {
+        builder = builder.connection_timeout(Duration::from_millis(timeout));
+    }
+    if let Some(timeout) = pool_options.idle_timeout_ms {
+        builder = builder.idle_timeout(Some(Duration::from_millis(timeout)));
+    }
+    builder
+}
+
 fn dialect_from_url(database_url: &str) -> Result<SqlDialect, OrmRuntimeError> {
     if database_url.starts_with("sqlite:") || database_url.starts_with("file:") {
         Ok(SqlDialect::Sqlite)
-    } else if database_url.starts_with("postgres://")
-        || database_url.starts_with("postgresql://")
-    {
+    } else if database_url.starts_with("postgres://") || database_url.starts_with("postgresql://") {
         Ok(SqlDialect::Postgres)
     } else if database_url.starts_with("mysql://") {
         Ok(SqlDialect::Mysql)
+    } else if database_url.starts_with("mssql://") || database_url.starts_with("sqlserver://") {
+        Ok(SqlDialect::Mssql)
     } else {
         Err(OrmRuntimeError::UnsupportedDatabaseUrl(database_url.into()))
     }
+}
+
+fn parse_mssql_config(database_url: &str) -> Result<MssqlConfig, OrmRuntimeError> {
+    let normalized_url = if let Some(value) = database_url.strip_prefix("sqlserver://") {
+        format!("mssql://{value}")
+    } else {
+        database_url.to_owned()
+    };
+    let url = url::Url::parse(&normalized_url)
+        .map_err(|_| OrmRuntimeError::InvalidMssqlDatabaseUrl(database_url.into()))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| OrmRuntimeError::InvalidMssqlDatabaseUrl(database_url.into()))?;
+    let user = url.username();
+
+    let mut config = MssqlConfig::new();
+    config.host(host);
+    config.port(url.port().unwrap_or(1433));
+    config.authentication(AuthMethod::sql_server(
+        percent_decode(user),
+        percent_decode(url.password().unwrap_or_default()),
+    ));
+
+    let database = url.path().trim_start_matches('/');
+    if !database.is_empty() {
+        config.database(database);
+    }
+
+    let encrypt = url
+        .query_pairs()
+        .find(|(key, _)| key == "encrypt")
+        .map(|(_, value)| value == "true")
+        .unwrap_or(false);
+    let trust_server_certificate = url
+        .query_pairs()
+        .find(|(key, _)| key == "trustServerCertificate")
+        .map(|(_, value)| value != "false")
+        .unwrap_or(true);
+
+    config.encryption(if encrypt {
+        EncryptionLevel::Required
+    } else {
+        EncryptionLevel::Off
+    });
+    if trust_server_certificate {
+        config.trust_cert();
+    }
+
+    Ok(config)
+}
+
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 2 < bytes.len() => {
+                let hex = &value[index + 1..index + 3];
+                if let Ok(parsed) = u8::from_str_radix(hex, 16) {
+                    decoded.push(parsed);
+                    index += 3;
+                    continue;
+                }
+                decoded.push(bytes[index]);
+            }
+            b'+' => decoded.push(b' '),
+            byte => decoded.push(byte),
+        }
+        index += 1;
+    }
+
+    String::from_utf8(decoded).unwrap_or_else(|_| value.to_owned())
 }
 
 fn insert_sql(dialect: SqlDialect, model: &OrmModelMetadata) -> String {
@@ -552,7 +732,11 @@ fn create_schema_statements(
     for model in models {
         statements.push(create_table_statement(dialect, model));
         statements.extend(create_index_statements(dialect, model));
-        statements.extend(create_many_to_many_statements(dialect, model, &models_by_name)?);
+        statements.extend(create_many_to_many_statements(
+            dialect,
+            model,
+            &models_by_name,
+        )?);
     }
 
     statements.sort();
@@ -586,6 +770,21 @@ fn create_table_statement(dialect: SqlDialect, model: &OrmModelMetadata) -> Stri
         .collect::<Vec<_>>()
         .join(", ");
 
+    let create_table_sql = format!(
+        "CREATE TABLE {} ({columns})",
+        quote_identifier(dialect, &model.table)
+    );
+
+    if dialect == SqlDialect::Mssql {
+        return schema_statement_with_existence_guard(
+            dialect,
+            "table",
+            &model.table,
+            &create_table_sql,
+            None,
+        );
+    }
+
     format!(
         "CREATE TABLE IF NOT EXISTS {} ({columns})",
         quote_identifier(dialect, &model.table)
@@ -598,12 +797,16 @@ fn create_index_statements(dialect: SqlDialect, model: &OrmModelMetadata) -> Vec
         .iter()
         .enumerate()
         .map(|(index_position, index)| {
-            let name = index
-                .name
-                .clone()
-                .unwrap_or_else(|| format!("{}_{}_{}", model.table, index.fields.join("_"), index_position));
-            format!(
-                "CREATE {}INDEX IF NOT EXISTS {} ON {} ({})",
+            let name = index.name.clone().unwrap_or_else(|| {
+                format!(
+                    "{}_{}_{}",
+                    model.table,
+                    index.fields.join("_"),
+                    index_position
+                )
+            });
+            let create_index_sql = format!(
+                "CREATE {}INDEX {} ON {} ({})",
                 if index.unique { "UNIQUE " } else { "" },
                 quote_identifier(dialect, &name),
                 quote_identifier(dialect, &model.table),
@@ -613,7 +816,30 @@ fn create_index_statements(dialect: SqlDialect, model: &OrmModelMetadata) -> Vec
                     .map(|field| quote_identifier(dialect, field))
                     .collect::<Vec<_>>()
                     .join(", ")
-            )
+            );
+
+            if dialect == SqlDialect::Mssql {
+                schema_statement_with_existence_guard(
+                    dialect,
+                    "index",
+                    &name,
+                    &create_index_sql,
+                    Some(&model.table),
+                )
+            } else {
+                format!(
+                    "CREATE {}INDEX IF NOT EXISTS {} ON {} ({})",
+                    if index.unique { "UNIQUE " } else { "" },
+                    quote_identifier(dialect, &name),
+                    quote_identifier(dialect, &model.table),
+                    index
+                        .fields
+                        .iter()
+                        .map(|field| quote_identifier(dialect, field))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
         })
         .collect()
 }
@@ -656,12 +882,14 @@ fn create_many_to_many_statements(
                     field: "targetKey".into(),
                 })?,
         )?;
-        let through_table = relation.through_table.as_deref().ok_or_else(|| {
-            OrmRuntimeError::UnknownField {
-                model: model.name.clone(),
-                field: "throughTable".into(),
-            }
-        })?;
+        let through_table =
+            relation
+                .through_table
+                .as_deref()
+                .ok_or_else(|| OrmRuntimeError::UnknownField {
+                    model: model.name.clone(),
+                    field: "throughTable".into(),
+                })?;
         let through_source_key = relation.through_source_key.as_deref().ok_or_else(|| {
             OrmRuntimeError::UnknownField {
                 model: model.name.clone(),
@@ -677,24 +905,82 @@ fn create_many_to_many_statements(
         let unique_index_name =
             format!("{through_table}_{through_source_key}_{through_target_key}_unique");
 
-        statements.push(format!(
-            "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL)",
+        let create_table_sql = format!(
+            "CREATE TABLE {} ({} {} NOT NULL, {} {} NOT NULL)",
             quote_identifier(dialect, through_table),
             quote_identifier(dialect, through_source_key),
             sql_type_for_field(dialect, source_field),
             quote_identifier(dialect, through_target_key),
             sql_type_for_field(dialect, target_field)
-        ));
-        statements.push(format!(
-            "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({}, {})",
+        );
+        statements.push(if dialect == SqlDialect::Mssql {
+            schema_statement_with_existence_guard(
+                dialect,
+                "table",
+                through_table,
+                &create_table_sql,
+                None,
+            )
+        } else {
+            format!(
+                "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL)",
+                quote_identifier(dialect, through_table),
+                quote_identifier(dialect, through_source_key),
+                sql_type_for_field(dialect, source_field),
+                quote_identifier(dialect, through_target_key),
+                sql_type_for_field(dialect, target_field)
+            )
+        });
+        let create_index_sql = format!(
+            "CREATE UNIQUE INDEX {} ON {} ({}, {})",
             quote_identifier(dialect, &unique_index_name),
             quote_identifier(dialect, through_table),
             quote_identifier(dialect, through_source_key),
             quote_identifier(dialect, through_target_key)
-        ));
+        );
+        statements.push(if dialect == SqlDialect::Mssql {
+            schema_statement_with_existence_guard(
+                dialect,
+                "index",
+                &unique_index_name,
+                &create_index_sql,
+                Some(through_table),
+            )
+        } else {
+            format!(
+                "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({}, {})",
+                quote_identifier(dialect, &unique_index_name),
+                quote_identifier(dialect, through_table),
+                quote_identifier(dialect, through_source_key),
+                quote_identifier(dialect, through_target_key)
+            )
+        });
     }
 
     Ok(statements)
+}
+
+fn schema_statement_with_existence_guard(
+    dialect: SqlDialect,
+    kind: &str,
+    name: &str,
+    statement: &str,
+    table_name: Option<&str>,
+) -> String {
+    match (dialect, kind) {
+        (SqlDialect::Mssql, "table") => format!(
+            "IF OBJECT_ID(N'{}', N'U') IS NULL EXEC(N'{}')",
+            escape_sql_string(name),
+            escape_sql_string(statement)
+        ),
+        (SqlDialect::Mssql, "index") => format!(
+            "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{}' AND object_id = OBJECT_ID(N'{}')) EXEC(N'{}')",
+            escape_sql_string(name),
+            escape_sql_string(table_name.unwrap_or_default()),
+            escape_sql_string(statement)
+        ),
+        _ => statement.to_owned(),
+    }
 }
 
 fn primary_key_field(model: &OrmModelMetadata) -> Result<&OrmFieldMetadata, OrmRuntimeError> {
@@ -713,24 +999,28 @@ fn field_by_name<'a>(
     model: &'a OrmModelMetadata,
     field_name: &str,
 ) -> Result<&'a OrmFieldMetadata, OrmRuntimeError> {
-    model.fields.iter().find(|field| field.name == field_name).ok_or_else(|| {
-        OrmRuntimeError::UnknownField {
+    model
+        .fields
+        .iter()
+        .find(|field| field.name == field_name)
+        .ok_or_else(|| OrmRuntimeError::UnknownField {
             model: model.name.clone(),
             field: field_name.into(),
-        }
-    })
+        })
 }
 
 fn placeholder(dialect: SqlDialect, index: usize) -> String {
     match dialect {
         SqlDialect::Sqlite | SqlDialect::Mysql => "?".into(),
         SqlDialect::Postgres => format!("${index}"),
+        SqlDialect::Mssql => format!("@p{index}"),
     }
 }
 
 fn quote_identifier(dialect: SqlDialect, identifier: &str) -> String {
     match dialect {
         SqlDialect::Mysql => format!("`{}`", identifier.replace('`', "``")),
+        SqlDialect::Mssql => format!("[{}]", identifier.replace(']', "]]")),
         SqlDialect::Sqlite | SqlDialect::Postgres => {
             format!("\"{}\"", identifier.replace('"', "\"\""))
         }
@@ -738,7 +1028,11 @@ fn quote_identifier(dialect: SqlDialect, identifier: &str) -> String {
 }
 
 fn quote_sql_string(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
+    format!("'{}'", escape_sql_string(value))
+}
+
+fn escape_sql_string(value: &str) -> String {
+    value.replace('\'', "''")
 }
 
 fn sql_type_for_field(dialect: SqlDialect, field: &OrmFieldMetadata) -> &'static str {
@@ -755,6 +1049,10 @@ fn sql_type_for_field(dialect: SqlDialect, field: &OrmFieldMetadata) -> &'static
         (SqlDialect::Mysql, "number") => "DOUBLE",
         (SqlDialect::Mysql, "boolean") => "BOOLEAN",
         (SqlDialect::Mysql, "json") => "LONGTEXT",
+        (SqlDialect::Mssql, "string") => "NVARCHAR(255)",
+        (SqlDialect::Mssql, "number") => "FLOAT",
+        (SqlDialect::Mssql, "boolean") => "BIT",
+        (SqlDialect::Mssql, "json") => "NVARCHAR(MAX)",
         (_, _) => "TEXT",
     }
 }
@@ -769,7 +1067,7 @@ fn default_value_sql(dialect: SqlDialect, field: &OrmFieldMetadata, value: &Valu
                     "FALSE".into()
                 }
             }
-            SqlDialect::Sqlite | SqlDialect::Mysql => {
+            SqlDialect::Sqlite | SqlDialect::Mysql | SqlDialect::Mssql => {
                 if value.as_bool().unwrap_or(false) {
                     "1".into()
                 } else {
@@ -900,6 +1198,47 @@ fn bind_mysql_query<'q>(
     })
 }
 
+fn bind_mssql_query(
+    query: &mut MssqlQuery<'static>,
+    field: &OrmFieldMetadata,
+    value: &Value,
+) -> Result<(), OrmRuntimeError> {
+    match field.field_type.as_str() {
+        "boolean" => {
+            if let Some(boolean) = value.as_bool() {
+                query.bind(boolean);
+            } else {
+                query.bind(Option::<bool>::None);
+            }
+        }
+        "number" => {
+            if let Some(number) = value.as_f64() {
+                query.bind(number);
+            } else {
+                query.bind(Option::<f64>::None);
+            }
+        }
+        "json" => {
+            if value.is_null() {
+                query.bind(Option::<String>::None);
+            } else {
+                query.bind(serde_json::to_string(value)?);
+            }
+        }
+        _ => {
+            if let Some(string) = value.as_str() {
+                query.bind(string.to_owned());
+            } else if value.is_null() {
+                query.bind(Option::<String>::None);
+            } else {
+                query.bind(value.to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn row_to_value_sqlite(
     model: &OrmModelMetadata,
     row: SqliteRow,
@@ -907,14 +1246,21 @@ fn row_to_value_sqlite(
     row_to_value(model, |field| match field.field_type.as_str() {
         "boolean" => row
             .try_get::<Option<i64>, _>(field.name.as_str())
-            .map(|value| value.map(|item| Value::Bool(item != 0)).unwrap_or(Value::Null)),
+            .map(|value| {
+                value
+                    .map(|item| Value::Bool(item != 0))
+                    .unwrap_or(Value::Null)
+            })
+            .map_err(OrmRuntimeError::from),
         "number" => row
             .try_get::<Option<f64>, _>(field.name.as_str())
-            .map(|value| value.map(Value::from).unwrap_or(Value::Null)),
-        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?) ,
+            .map(|value| value.map(Value::from).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?),
         _ => row
             .try_get::<Option<String>, _>(field.name.as_str())
-            .map(|value| value.map(Value::String).unwrap_or(Value::Null)),
+            .map(|value| value.map(Value::String).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
     })
 }
 
@@ -925,14 +1271,17 @@ fn row_to_value_postgres(
     row_to_value(model, |field| match field.field_type.as_str() {
         "boolean" => row
             .try_get::<Option<bool>, _>(field.name.as_str())
-            .map(|value| value.map(Value::Bool).unwrap_or(Value::Null)),
+            .map(|value| value.map(Value::Bool).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
         "number" => row
             .try_get::<Option<f64>, _>(field.name.as_str())
-            .map(|value| value.map(Value::from).unwrap_or(Value::Null)),
-        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?) ,
+            .map(|value| value.map(Value::from).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?),
         _ => row
             .try_get::<Option<String>, _>(field.name.as_str())
-            .map(|value| value.map(Value::String).unwrap_or(Value::Null)),
+            .map(|value| value.map(Value::String).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
     })
 }
 
@@ -943,14 +1292,42 @@ fn row_to_value_mysql(
     row_to_value(model, |field| match field.field_type.as_str() {
         "boolean" => row
             .try_get::<Option<bool>, _>(field.name.as_str())
-            .map(|value| value.map(Value::Bool).unwrap_or(Value::Null)),
+            .map(|value| value.map(Value::Bool).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
         "number" => row
             .try_get::<Option<f64>, _>(field.name.as_str())
-            .map(|value| value.map(Value::from).unwrap_or(Value::Null)),
-        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?) ,
+            .map(|value| value.map(Value::from).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+        "json" => decode_json_column(row.try_get::<Option<String>, _>(field.name.as_str())?),
         _ => row
             .try_get::<Option<String>, _>(field.name.as_str())
-            .map(|value| value.map(Value::String).unwrap_or(Value::Null)),
+            .map(|value| value.map(Value::String).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+    })
+}
+
+fn row_to_value_mssql(
+    model: &OrmModelMetadata,
+    row: MssqlRow,
+) -> Result<JsonMap<String, Value>, OrmRuntimeError> {
+    row_to_value(model, |field| match field.field_type.as_str() {
+        "boolean" => row
+            .try_get::<bool, _>(field.name.as_str())
+            .map(|value| value.map(Value::Bool).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+        "number" => row
+            .try_get::<f64, _>(field.name.as_str())
+            .map(|value| value.map(Value::from).unwrap_or(Value::Null))
+            .map_err(OrmRuntimeError::from),
+        "json" => decode_json_column_mssql(row.try_get::<&str, _>(field.name.as_str())?),
+        _ => row
+            .try_get::<&str, _>(field.name.as_str())
+            .map(|value| {
+                value
+                    .map(|item| Value::String(item.to_owned()))
+                    .unwrap_or(Value::Null)
+            })
+            .map_err(OrmRuntimeError::from),
     })
 }
 
@@ -959,7 +1336,7 @@ fn row_to_value<F>(
     mut mapper: F,
 ) -> Result<JsonMap<String, Value>, OrmRuntimeError>
 where
-    F: FnMut(&OrmFieldMetadata) -> Result<Value, sqlx::Error>,
+    F: FnMut(&OrmFieldMetadata) -> Result<Value, OrmRuntimeError>,
 {
     let mut map = JsonMap::new();
     for field in &model.fields {
@@ -968,10 +1345,16 @@ where
     Ok(map)
 }
 
-fn decode_json_column(value: Option<String>) -> Result<Value, sqlx::Error> {
+fn decode_json_column(value: Option<String>) -> Result<Value, OrmRuntimeError> {
     match value {
-        Some(value) => serde_json::from_str(&value)
-            .map_err(|error| sqlx::Error::Decode(Box::new(error))),
+        Some(value) => serde_json::from_str(&value).map_err(OrmRuntimeError::from),
+        None => Ok(Value::Null),
+    }
+}
+
+fn decode_json_column_mssql(value: Option<&str>) -> Result<Value, OrmRuntimeError> {
+    match value {
+        Some(value) => serde_json::from_str(value).map_err(OrmRuntimeError::from),
         None => Ok(Value::Null),
     }
 }
@@ -1079,6 +1462,59 @@ async fn pull_schema_mysql(pool: &MySqlPool) -> Result<Vec<TableSchema>, OrmRunt
     Ok(schemas)
 }
 
+async fn pull_schema_mssql(
+    pool: &Pool<MssqlConnectionManager>,
+) -> Result<Vec<TableSchema>, OrmRuntimeError> {
+    let mut connection = pool.get().await?;
+    let tables = MssqlQuery::new(
+        "SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME ASC",
+    )
+    .query(&mut connection)
+    .await?
+    .into_first_result()
+    .await?;
+
+    let mut schemas = Vec::new();
+    for table in tables {
+        let name = table
+            .try_get::<&str, _>("table_name")?
+            .unwrap_or_default()
+            .to_owned();
+        let mut columns_query = MssqlQuery::new(
+            "SELECT c.COLUMN_NAME AS column_name, c.DATA_TYPE AS data_type, c.IS_NULLABLE AS is_nullable, CASE WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA WHERE tc.TABLE_NAME = c.TABLE_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND kcu.COLUMN_NAME = c.COLUMN_NAME) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS primary_key FROM INFORMATION_SCHEMA.COLUMNS c WHERE c.TABLE_NAME = @p1 ORDER BY c.ORDINAL_POSITION ASC",
+        );
+        columns_query.bind(name.clone());
+        let columns = columns_query
+            .query(&mut connection)
+            .await?
+            .into_first_result()
+            .await?;
+
+        schemas.push(TableSchema {
+            name,
+            columns: columns
+                .into_iter()
+                .map(|column| {
+                    Ok(TableColumnSchema {
+                        name: column
+                            .try_get::<&str, _>("column_name")?
+                            .unwrap_or_default()
+                            .to_owned(),
+                        type_name: column
+                            .try_get::<&str, _>("data_type")?
+                            .unwrap_or_default()
+                            .to_owned(),
+                        not_null: column.try_get::<&str, _>("is_nullable")? == Some("NO"),
+                        primary_key: column.try_get::<bool, _>("primary_key")?.unwrap_or(false),
+                    })
+                })
+                .collect::<Result<Vec<_>, tiberius::error::Error>>()?,
+        });
+    }
+
+    Ok(schemas)
+}
+
 fn default_sort_direction() -> String {
     "asc".into()
 }
@@ -1126,23 +1562,97 @@ mod tests {
 
     #[test]
     fn detects_supported_database_urls() {
-        assert_eq!(dialect_from_url("sqlite::memory:").unwrap(), SqlDialect::Sqlite);
+        assert_eq!(
+            dialect_from_url("sqlite::memory:").unwrap(),
+            SqlDialect::Sqlite
+        );
         assert_eq!(
             dialect_from_url("postgres://localhost/db").unwrap(),
             SqlDialect::Postgres
         );
-        assert_eq!(dialect_from_url("mysql://localhost/db").unwrap(), SqlDialect::Mysql);
+        assert_eq!(
+            dialect_from_url("mysql://localhost/db").unwrap(),
+            SqlDialect::Mysql
+        );
+        assert_eq!(
+            dialect_from_url("mssql://localhost/db").unwrap(),
+            SqlDialect::Mssql
+        );
+        assert_eq!(
+            dialect_from_url("sqlserver://localhost/db").unwrap(),
+            SqlDialect::Mssql
+        );
     }
 
     #[test]
     fn rejects_unsupported_database_urls() {
-        let error = dialect_from_url("mssql://localhost/db").unwrap_err();
+        let error = dialect_from_url("redis://localhost/db").unwrap_err();
         assert!(matches!(error, OrmRuntimeError::UnsupportedDatabaseUrl(_)));
+    }
+
+    #[test]
+    fn renders_mssql_sql_helpers() {
+        let string_field = OrmFieldMetadata {
+            name: "name".into(),
+            field_type: "string".into(),
+            nullable: false,
+            default_value: None,
+            primary_key: false,
+        };
+        let boolean_field = OrmFieldMetadata {
+            name: "active".into(),
+            field_type: "boolean".into(),
+            nullable: false,
+            default_value: Some(Value::Bool(true)),
+            primary_key: false,
+        };
+        let json_field = OrmFieldMetadata {
+            name: "meta".into(),
+            field_type: "json".into(),
+            nullable: true,
+            default_value: Some(json!({ "role": "admin" })),
+            primary_key: false,
+        };
+
+        assert_eq!(placeholder(SqlDialect::Mssql, 2), "@p2");
+        assert_eq!(
+            quote_identifier(SqlDialect::Mssql, "users]archive"),
+            "[users]]archive]"
+        );
+        assert_eq!(
+            sql_type_for_field(SqlDialect::Mssql, &string_field),
+            "NVARCHAR(255)"
+        );
+        assert_eq!(sql_type_for_field(SqlDialect::Mssql, &boolean_field), "BIT");
+        assert_eq!(
+            sql_type_for_field(SqlDialect::Mssql, &json_field),
+            "NVARCHAR(MAX)"
+        );
+        assert_eq!(
+            default_value_sql(SqlDialect::Mssql, &boolean_field, &Value::Bool(true)),
+            "1"
+        );
+        assert_eq!(
+            default_value_sql(SqlDialect::Mssql, &json_field, &json!({ "role": "admin" })),
+            "'{\"role\":\"admin\"}'"
+        );
+    }
+
+    #[test]
+    fn parses_mssql_urls_with_existing_contract() {
+        let config = parse_mssql_config(
+            "sqlserver://user%20name:pa%24%24@db.example.com/app?encrypt=true&trustServerCertificate=false",
+        )
+        .unwrap();
+
+        assert_eq!(config.get_addr(), "db.example.com:1433");
     }
 
     #[tokio::test]
     async fn pushes_schema_and_runs_crud_in_sqlite() {
-        let runtime = SqlOrmRuntime::connect("sqlite::memory:", None).await.unwrap();
+        let runtime = SqlOrmRuntime::connect("sqlite::memory:", None)
+            .await
+            .unwrap();
         let user = user_model();
 
         let statements = runtime.push_schema(&[user.clone()]).await.unwrap();
@@ -1247,5 +1757,73 @@ mod tests {
             .await
             .unwrap();
         assert!(runtime.find_by_id(&user, "my_1").await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn mssql_integration_runs_when_configured() {
+        let Some(database_url) = std::env::var("EZORM_TEST_MSSQL_URL").ok() else {
+            return;
+        };
+        let runtime = SqlOrmRuntime::connect(&database_url, None).await.unwrap();
+        let user = user_model();
+        runtime.push_schema(&[user.clone()]).await.unwrap();
+        runtime
+            .create(
+                &user,
+                &JsonMap::from_iter([
+                    ("id".into(), Value::String("ms_1".into())),
+                    ("email".into(), Value::String("mssql@example.com".into())),
+                    ("active".into(), Value::Bool(true)),
+                ]),
+            )
+            .await
+            .unwrap();
+
+        let found = runtime.find_by_id(&user, "ms_1").await.unwrap().unwrap();
+        assert_eq!(found["email"], json!("mssql@example.com"));
+
+        let filtered = runtime
+            .find_many(
+                &user,
+                Some(OrmFindManyOptions {
+                    where_clause: Some(BTreeMap::from([(
+                        "email".into(),
+                        Value::String("mssql@example.com".into()),
+                    )])),
+                    order_by: Some(OrmOrderBy {
+                        field: "email".into(),
+                        direction: "asc".into(),
+                    }),
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(filtered.len(), 1);
+
+        let schema = runtime.pull_schema().await.unwrap();
+        assert!(schema.iter().any(|table| table.name == "users"));
+
+        runtime
+            .update(
+                &user,
+                "ms_1",
+                &JsonMap::from_iter([
+                    ("id".into(), Value::String("ms_1".into())),
+                    (
+                        "email".into(),
+                        Value::String("updated-mssql@example.com".into()),
+                    ),
+                    ("active".into(), Value::Bool(false)),
+                ]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            runtime.find_by_id(&user, "ms_1").await.unwrap().unwrap()["active"],
+            json!(false)
+        );
+
+        runtime.delete(&user, "ms_1").await.unwrap();
+        assert!(runtime.find_by_id(&user, "ms_1").await.unwrap().is_none());
     }
 }

@@ -5,9 +5,13 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bb8.workspace = true
+bb8-tiberius.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
+tiberius.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+url.workspace = true
 ezorm_dialects = { path = "../dialects" }

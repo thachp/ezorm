@@ -66,7 +66,7 @@ Current example workflows:
 - `@ezorm/core` owns metadata, validation, indices, and relation declarations.
 - `@ezorm/orm` owns the direct relational ORM for SQLite, PostgreSQL, MySQL, and MSSQL in Node, including repository CRUD, query joins, relation loading, and schema push/pull.
 - `@ezorm/runtime-node` should preserve the same direct ORM behavior surface as `@ezorm/orm`.
-- `@ezorm/runtime-proxy` currently supports repository CRUD plus `pushSchema` / `pullSchema` for SQLite, PostgreSQL, and MySQL through the Rust proxy/runtime layer.
+- `@ezorm/runtime-proxy` currently supports repository CRUD plus `pushSchema` / `pullSchema` for SQLite, PostgreSQL, MySQL, and MSSQL through the Rust proxy/runtime layer.
 - Keep primary key handling simple in v1: application-supplied keys and single-column primary keys only.
 - Relation-aware reads should go through explicit key-mapped `BelongsTo`, `HasMany`, or `ManyToMany` metadata plus `client.query(...)` for lazy query entities or explicit `load(...)` / `loadMany(...)` for plain repository objects.
 - Query-scoped implicit lazy loading and projection `select()` are now intentional ORM features. Keep lazy relation properties scoped to `client.query(...)` results and keep `select()` in flat projection mode rather than mixing it into repository CRUD flows.

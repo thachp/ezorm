@@ -15,10 +15,14 @@ version = "0.1.0"
 [workspace.dependencies]
 async-trait = "0.1"
 axum = { version = "0.8", features = ["json"] }
+bb8 = "0.9"
+bb8-tiberius = "0.16"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "postgres", "mysql"] }
+tiberius = { version = "0.12", default-features = false, features = ["tokio", "rustls"] }
 tokio = { version = "1.48", features = ["macros", "net", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
+url = "2.5"

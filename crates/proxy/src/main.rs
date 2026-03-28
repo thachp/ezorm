@@ -1,7 +1,7 @@
 use std::{env, error::Error, io};
 
-use tokio::net::TcpListener;
 use ezorm_orm_runtime::RelationalPoolOptions;
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -42,7 +42,10 @@ fn parse_env_u32(name: &str) -> Result<Option<u32>, io::Error> {
             .map(Some)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
         Err(env::VarError::NotPresent) => Ok(None),
-        Err(error) => Err(io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+        Err(error) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            error.to_string(),
+        )),
     }
 }
 
@@ -53,6 +56,9 @@ fn parse_env_u64(name: &str) -> Result<Option<u64>, io::Error> {
             .map(Some)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
         Err(env::VarError::NotPresent) => Ok(None),
-        Err(error) => Err(io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+        Err(error) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            error.to_string(),
+        )),
     }
 }

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use ezorm_dialects::SqlDialect;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModelTable {

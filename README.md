@@ -11,23 +11,23 @@
 
 ## Why Ezorm Is Different
 
-Ezorm is intentionally split into a small TypeScript ORM surface and an optional Rust-backed proxy runtime instead of treating every environment as the same deployment target. `@ezorm/core` keeps model metadata, validation, indices, and relations in decorated TypeScript classes, and `@ezorm/orm` builds a focused repository and read-query API on top of that model layer. The direct `@ezorm/orm` path and `@ezorm/runtime-node` remain SQLite-only through `node:sqlite`, while `@ezorm/runtime-proxy` plus the managed proxy provide pooled repository CRUD plus schema push/pull for SQLite, PostgreSQL, and MySQL through SQLx-backed Rust runtime components. That makes connection pooling and runtime shape an explicit architectural choice instead of something hidden behind a single adapter.
+Ezorm is intentionally split into a small TypeScript ORM surface and an optional Rust-backed proxy runtime instead of treating every environment as the same deployment target. `@ezorm/core` keeps model metadata, validation, indices, and relations in decorated TypeScript classes, and `@ezorm/orm` builds a focused repository and read-query API on top of that model layer. The direct `@ezorm/orm` path and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL from Node, while `@ezorm/runtime-proxy` plus the managed proxy provide pooled repository CRUD plus schema push/pull for SQLite, PostgreSQL, MySQL, and MSSQL through the Rust runtime components. That makes connection pooling and runtime shape an explicit architectural choice instead of something hidden behind a single adapter.
 
 | Dimension | ezorm | Prisma | Many TypeScript ORMs |
 | --- | --- | --- | --- |
 | Model definition | Decorated TypeScript classes in `@ezorm/core` | Schema file plus generated client | Varies between decorators, schema builders, and active-record style models |
 | Validation / metadata | Model definitions produce runtime metadata plus input validation from the same source | Type safety centers on the generated client and schema, not decorator metadata | Often split between ORM metadata and separate validation libraries |
 | Repository API shape | Small CRUD repositories plus explicit read queries, joins, includes, and relation loaders | Generated model delegates with broader query APIs | Often larger query-builder or repository surfaces |
-| Database support today | Direct `@ezorm/orm` and `@ezorm/runtime-node` target SQLite via `node:sqlite`; `@ezorm/runtime-proxy` supports SQLite, PostgreSQL, and MySQL; MSSQL is not currently supported | Multi-database support is part of the main client/runtime story | Varies by adapter and dialect |
-| Connection pooling today | `@ezorm/runtime-proxy` uses pooled SQLx connections; direct `@ezorm/orm` and `@ezorm/runtime-node` remain local SQLite paths | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
+| Database support today | Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL; `@ezorm/runtime-proxy` supports pooled CRUD and schema sync for SQLite, PostgreSQL, MySQL, and MSSQL | Multi-database support is part of the main client/runtime story | Varies by adapter and dialect |
+| Connection pooling today | `@ezorm/runtime-proxy` uses pooled Rust database connections; direct `@ezorm/orm` and `@ezorm/runtime-node` use direct driver connections in the app runtime | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
 | Runtime / deployment shape | Can run directly in local Node SQLite flows or move relational work behind Rust-backed runtime and proxy helpers | Usually presented as one generated client talking to the database from server runtimes | Usually optimized for direct database access from the app runtime |
 | Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI currently exposes the intended workflow surface while most commands still print queued/demo output | Migration and introspection workflows are core product features | Varies widely across tools |
 | Current scope | Focused on decorated models, repository CRUD, explicit read queries, query-scoped lazy relations, projection selects, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
 
 Current limits are important:
 
-- The main `@ezorm/orm` package is still SQLite-only today.
-- Cross-database pooled ORM CRUD and schema sync are available through `@ezorm/runtime-proxy` and the managed proxy runtime.
+- Direct `@ezorm/orm` and `@ezorm/runtime-node` support SQLite, PostgreSQL, MySQL, and MSSQL.
+- Cross-database pooled ORM CRUD and schema sync are available through `@ezorm/runtime-proxy` and the managed proxy runtime for SQLite, PostgreSQL, MySQL, and MSSQL.
 - Query support is intentionally focused on repository CRUD plus explicit read queries, query-scoped lazy relations, projection selects, and relation loading.
 - Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the proxy-backed runtime yet.
 - The CLI command surface is implemented, but most commands still print queued/demo output.
