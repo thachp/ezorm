@@ -1,0 +1,19 @@
+{
+  "name": "sqlmodel-ts-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@8.15.7",
+  "scripts": {
+    "build:ts": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:ts": "vitest run",
+    "test": "pnpm test:ts && cargo test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4"
+  }
+}
+

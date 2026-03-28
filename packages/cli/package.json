@@ -1,0 +1,9 @@
+{
+  "name": "@sqlmodel-ts/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "orm": "./src/index.ts"
+  },
+  "exports": "./src/index.ts"
+}

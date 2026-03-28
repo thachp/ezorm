@@ -1,0 +1,19 @@
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package]
+name = "sqlmodel_ts_napi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+napi = { version = "2.16", default-features = false, features = ["napi8"] }
+napi-derive = "2.16"
+sqlmodel_ts_event_store = { path = "../event_store" }
+
+[build-dependencies]
+napi-build = "2.1"

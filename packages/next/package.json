@@ -1,0 +1,10 @@
+{
+  "name": "@sqlmodel-ts/next",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts",
+    "./edge": "./src/edge.ts"
+  }
+}

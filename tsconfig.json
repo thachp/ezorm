@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "baseUrl": ".",
+    "paths": {
+      "@sqlmodel-ts/core": ["packages/core/src/index.ts"],
+      "@sqlmodel-ts/cqrs": ["packages/cqrs/src/index.ts"],
+      "@sqlmodel-ts/events": ["packages/events/src/index.ts"],
+      "@sqlmodel-ts/runtime-node": ["packages/runtime-node/src/index.ts"],
+      "@sqlmodel-ts/runtime-proxy": ["packages/runtime-proxy/src/index.ts"],
+      "@sqlmodel-ts/next": ["packages/next/src/index.ts"],
+      "@sqlmodel-ts/next/node": ["packages/next/src/node.ts"],
+      "@sqlmodel-ts/next/edge": ["packages/next/src/edge.ts"],
+      "@sqlmodel-ts/nestjs": ["packages/nestjs/src/index.ts"],
+      "@sqlmodel-ts/cli": ["packages/cli/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+}
