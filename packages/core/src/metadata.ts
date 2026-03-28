@@ -69,24 +69,6 @@ function addRelation(target: object, propertyKey: string | symbol, relation: Pen
   });
 }
 
-export function Aggregate(): ClassDecorator {
-  return (target) => {
-    ensureModel(target, { kind: "model" });
-  };
-}
-
-export function Projection(): ClassDecorator {
-  return (target) => {
-    ensureModel(target, { kind: "model" });
-  };
-}
-
-export function Event(): ClassDecorator {
-  return (target) => {
-    ensureModel(target, { kind: "model" });
-  };
-}
-
 export function Model(options: ModelOptions = {}): ClassDecorator {
   return (target) => {
     ensureModel(target, { kind: "model", table: options.table ?? defaultTableName(target.name) });

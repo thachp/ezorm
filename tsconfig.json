@@ -17,7 +17,6 @@
     "paths": {
       "@ezorm/core": ["packages/core/src/index.ts"],
       "@ezorm/orm": ["packages/orm/src/index.ts"],
-      "@ezorm/events": ["packages/events/src/index.ts"],
       "@ezorm/proxy-node": ["packages/proxy-node/src/index.ts"],
       "@ezorm/runtime-node": ["packages/runtime-node/src/index.ts"],
       "@ezorm/runtime-proxy": ["packages/runtime-proxy/src/index.ts"],
@@ -28,5 +27,5 @@
       "ezorm": ["packages/cli/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": ["packages/**/*.ts", "packages/**/*.d.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

@@ -4,9 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@8.15.7",
   "scripts": {
-    "build": "pnpm build:ts && pnpm build:native",
-    "build:native": "node packages/runtime-node/scripts/build-native.mjs --release",
-    "build:native:debug": "node packages/runtime-node/scripts/build-native.mjs",
+    "build": "pnpm build:ts",
     "build:proxy-node": "pnpm --dir packages/proxy-node run build",
     "build:ezorm": "pnpm --dir packages/cli run build",
     "build:ts": "tsc -p tsconfig.json",

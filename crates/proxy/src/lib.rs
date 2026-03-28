@@ -10,72 +10,11 @@ use ezorm_orm_runtime::{
     TableSchema,
 };
 use serde::{Deserialize, Serialize};
-use ezorm_event_store::{EventRecord, EventStoreError, NewEvent, SqlEventStore};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LoadStreamRequest {
-    pub stream_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LoadStreamResponse {
-    pub events: Vec<EventRecord>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LoadAllEventsRequest {
-    #[serde(default)]
-    pub after_sequence: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LoadAllEventsResponse {
-    pub events: Vec<EventRecord>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AppendEventsRequest {
-    pub stream_id: String,
-    pub version: u64,
-    pub events: Vec<NewEvent>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AppendEventsResponse {
-    pub events: Vec<EventRecord>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LatestVersionRequest {
-    pub stream_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LatestVersionResponse {
-    pub version: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ErrorDetails {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expected_version: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actual_version: Option<u64>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ErrorResponse {
     pub code: String,
     pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<ErrorDetails>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -84,19 +23,8 @@ pub enum ProxyHttpError {
     BadRequest(String),
     #[error("{0}")]
     NotFound(String),
-    #[error("version conflict for stream `{stream_id}`: expected {expected_version}, actual {actual_version}")]
-    VersionConflict {
-        stream_id: String,
-        expected_version: u64,
-        actual_version: u64,
-    },
     #[error("{0}")]
     Internal(String),
-}
-
-#[derive(Debug, Clone)]
-struct ProxyState {
-    store: SqlEventStore,
 }
 
 #[derive(Debug, Clone)]
@@ -152,31 +80,15 @@ pub struct PushSchemaResponse {
     pub statements: Vec<String>,
 }
 
-pub async fn create_proxy_app(database_url: &str) -> Result<Router, ProxyHttpError> {
-    let store = SqlEventStore::connect(database_url).await?;
-    store.bootstrap().await?;
-    Ok(create_router(store))
-}
-
-pub async fn create_managed_proxy_app(
+pub async fn create_proxy_app(
     database_url: &str,
     pool_options: Option<RelationalPoolOptions>,
 ) -> Result<Router, ProxyHttpError> {
     let runtime = SqlOrmRuntime::connect(database_url, pool_options).await?;
-    Ok(create_managed_router(runtime))
+    Ok(create_router(runtime))
 }
 
-pub fn create_router(store: SqlEventStore) -> Router {
-    Router::new()
-        .route("/healthz", get(health))
-        .route("/events/load", post(load_events))
-        .route("/events/load-all", post(load_all_events))
-        .route("/events/append", post(append_events))
-        .route("/events/latest-version", post(latest_version))
-        .with_state(ProxyState { store })
-}
-
-pub fn create_managed_router(runtime: SqlOrmRuntime) -> Router {
+pub fn create_router(runtime: SqlOrmRuntime) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/orm/create", post(orm_create))
@@ -197,7 +109,6 @@ impl IntoResponse for ProxyHttpError {
                 ErrorResponse {
                     code: "bad_request".into(),
                     message,
-                    details: None,
                 },
             ),
             Self::NotFound(message) => (
@@ -205,25 +116,6 @@ impl IntoResponse for ProxyHttpError {
                 ErrorResponse {
                     code: "not_found".into(),
                     message,
-                    details: None,
-                },
-            ),
-            Self::VersionConflict {
-                stream_id,
-                expected_version,
-                actual_version,
-            } => (
-                StatusCode::CONFLICT,
-                ErrorResponse {
-                    code: "version_conflict".into(),
-                    message: format!(
-                        "Version conflict for {stream_id}: expected {expected_version}, actual {actual_version}"
-                    ),
-                    details: Some(ErrorDetails {
-                        stream_id: Some(stream_id),
-                        expected_version: Some(expected_version),
-                        actual_version: Some(actual_version),
-                    }),
                 },
             ),
             Self::Internal(message) => (
@@ -231,33 +123,11 @@ impl IntoResponse for ProxyHttpError {
                 ErrorResponse {
                     code: "internal_error".into(),
                     message,
-                    details: None,
                 },
             ),
         };
 
         (status, Json(body)).into_response()
-    }
-}
-
-impl From<EventStoreError> for ProxyHttpError {
-    fn from(error: EventStoreError) -> Self {
-        match error {
-            EventStoreError::VersionConflict {
-                stream_id,
-                expected_version,
-                actual_version,
-            } => Self::VersionConflict {
-                stream_id,
-                expected_version,
-                actual_version,
-            },
-            EventStoreError::UnsupportedDatabaseUrl(database_url) => {
-                Self::BadRequest(format!("unsupported database url `{database_url}`"))
-            }
-            EventStoreError::Sqlx(error) => Self::Internal(error.to_string()),
-            EventStoreError::Serde(error) => Self::Internal(error.to_string()),
-        }
     }
 }
 
@@ -300,45 +170,6 @@ impl From<JsonRejection> for ProxyHttpError {
 
 async fn health() -> StatusCode {
     StatusCode::OK
-}
-
-async fn load_events(
-    State(state): State<ProxyState>,
-    payload: Result<Json<LoadStreamRequest>, JsonRejection>,
-) -> Result<Json<LoadStreamResponse>, ProxyHttpError> {
-    let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let events = state.store.load_stream(&payload.stream_id).await?;
-    Ok(Json(LoadStreamResponse { events }))
-}
-
-async fn load_all_events(
-    State(state): State<ProxyState>,
-    payload: Result<Json<LoadAllEventsRequest>, JsonRejection>,
-) -> Result<Json<LoadAllEventsResponse>, ProxyHttpError> {
-    let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let events = state.store.load_all_after(payload.after_sequence).await?;
-    Ok(Json(LoadAllEventsResponse { events }))
-}
-
-async fn append_events(
-    State(state): State<ProxyState>,
-    payload: Result<Json<AppendEventsRequest>, JsonRejection>,
-) -> Result<Json<AppendEventsResponse>, ProxyHttpError> {
-    let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let events = state
-        .store
-        .append(&payload.stream_id, payload.version, payload.events)
-        .await?;
-    Ok(Json(AppendEventsResponse { events }))
-}
-
-async fn latest_version(
-    State(state): State<ProxyState>,
-    payload: Result<Json<LatestVersionRequest>, JsonRejection>,
-) -> Result<Json<LatestVersionResponse>, ProxyHttpError> {
-    let Json(payload) = payload.map_err(ProxyHttpError::from)?;
-    let version = state.store.latest_version(&payload.stream_id).await?;
-    Ok(Json(LatestVersionResponse { version }))
 }
 
 async fn orm_create(
@@ -420,51 +251,9 @@ mod tests {
     use tokio::{net::TcpListener, task::JoinHandle};
     use tower::ServiceExt;
 
-    #[test]
-    fn serializes_proxy_contracts() {
-        let append_request = AppendEventsRequest {
-            stream_id: "account-1".into(),
-            version: 0,
-            events: vec![NewEvent {
-                event_type: "opened".into(),
-                payload: json!({}),
-                schema_version: 1,
-                metadata: None,
-            }],
-        };
-        let latest_version_response = LatestVersionResponse { version: 3 };
-
-        let encoded_request = serde_json::to_string(&append_request).unwrap();
-        let encoded_response = serde_json::to_string(&latest_version_response).unwrap();
-        let decoded_request: AppendEventsRequest = serde_json::from_str(&encoded_request).unwrap();
-        let decoded_response: LatestVersionResponse =
-            serde_json::from_str(&encoded_response).unwrap();
-
-        assert!(encoded_request.contains("\"streamId\":\"account-1\""));
-        assert!(encoded_request.contains("\"version\":0"));
-        assert_eq!(decoded_request, append_request);
-        assert_eq!(decoded_response, latest_version_response);
-    }
-
-    #[tokio::test]
-    async fn startup_bootstraps_schema() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
-
-        let response = app
-            .oneshot(json_request(
-                "/events/load",
-                json!({ "streamId": "account-1" }),
-            ))
-            .await
-            .unwrap();
-        let body: LoadStreamResponse = read_json(response).await;
-
-        assert!(body.events.is_empty());
-    }
-
     #[tokio::test]
     async fn healthcheck_reports_ready() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
+        let app = create_proxy_app("sqlite::memory:", None).await.unwrap();
 
         let response = app
             .oneshot(
@@ -481,8 +270,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn managed_proxy_serves_orm_routes_without_bootstrapping_event_tables() {
-        let app = create_managed_proxy_app("sqlite::memory:", None).await.unwrap();
+    async fn proxy_serves_repository_crud_and_schema_routes() {
+        let app = create_proxy_app("sqlite::memory:", None).await.unwrap();
         let model = user_model_metadata();
 
         let push_response = app
@@ -501,7 +290,7 @@ mod tests {
             .oneshot(json_request(
                 "/orm/create",
                 json!({
-                    "model": model,
+                    "model": model.clone(),
                     "input": {
                         "id": "usr_1",
                         "email": "alice@example.com",
@@ -513,22 +302,87 @@ mod tests {
             .unwrap();
         assert_eq!(create_response.status(), StatusCode::NO_CONTENT);
 
+        let find_many_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/find-many",
+                json!({
+                    "model": model.clone(),
+                    "options": {
+                        "where": { "email": "alice@example.com" },
+                        "orderBy": { "field": "email", "direction": "asc" }
+                    }
+                }),
+            ))
+            .await
+            .unwrap();
+        let records: Vec<serde_json::Map<String, serde_json::Value>> =
+            read_json(find_many_response).await;
+        assert_eq!(records.len(), 1);
+
+        let update_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/update",
+                json!({
+                    "model": model.clone(),
+                    "id": "usr_1",
+                    "input": {
+                        "id": "usr_1",
+                        "email": "updated@example.com",
+                        "active": false
+                    }
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(update_response.status(), StatusCode::NO_CONTENT);
+
         let find_response = app
             .clone()
             .oneshot(json_request(
                 "/orm/find-by-id",
                 json!({
-                    "model": user_model_metadata(),
+                    "model": model.clone(),
                     "id": "usr_1"
                 }),
             ))
             .await
             .unwrap();
         let record: Option<serde_json::Map<String, serde_json::Value>> = read_json(find_response).await;
+        let record = record.unwrap();
         assert_eq!(
-            record.unwrap().get("email"),
-            Some(&serde_json::Value::String("alice@example.com".into()))
+            record.get("email"),
+            Some(&serde_json::Value::String("updated@example.com".into()))
         );
+        assert_eq!(record.get("active"), Some(&serde_json::Value::Bool(false)));
+
+        let delete_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/delete",
+                json!({
+                    "model": model.clone(),
+                    "id": "usr_1"
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+
+        let deleted_response = app
+            .clone()
+            .oneshot(json_request(
+                "/orm/find-by-id",
+                json!({
+                    "model": model,
+                    "id": "usr_1"
+                }),
+            ))
+            .await
+            .unwrap();
+        let deleted: Option<serde_json::Map<String, serde_json::Value>> = read_json(deleted_response).await;
+        assert!(deleted.is_none());
 
         let pull_response = app
             .oneshot(json_request("/orm/schema/pull", json!({})))
@@ -540,222 +394,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_returns_ordered_stream_events() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
-
-        let append_response = app
-            .clone()
-            .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": {},
-                            "schema_version": 1,
-                            "metadata": null
-                        },
-                        {
-                            "event_type": "deposited",
-                            "payload": { "amount": 10 },
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
-            ))
-            .await
-            .unwrap();
-        let appended: AppendEventsResponse = read_json(append_response).await;
-
-        let load_response = app
-            .oneshot(json_request(
-                "/events/load",
-                json!({ "streamId": "account-1" }),
-            ))
-            .await
-            .unwrap();
-        let loaded: LoadStreamResponse = read_json(load_response).await;
-
-        assert_eq!(appended.events.len(), 2);
-        assert_eq!(loaded.events.len(), 2);
-        assert_eq!(loaded.events[0].event_type, "opened");
-        assert_eq!(loaded.events[0].version, 1);
-        assert_eq!(loaded.events[1].event_type, "deposited");
-        assert_eq!(loaded.events[1].version, 2);
-    }
-
-    #[tokio::test]
-    async fn load_all_filters_by_sequence() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
+    async fn proxy_maps_missing_records_to_404() {
+        let app = create_proxy_app("sqlite::memory:", None).await.unwrap();
+        let model = user_model_metadata();
 
         app.clone()
             .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": {},
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
-            ))
-            .await
-            .unwrap();
-
-        app.clone()
-            .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-2",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": { "owner": "alice" },
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
+                "/orm/schema/push",
+                json!({ "models": [model.clone()] }),
             ))
             .await
             .unwrap();
 
         let response = app
             .oneshot(json_request(
-                "/events/load-all",
-                json!({ "afterSequence": 1 }),
-            ))
-            .await
-            .unwrap();
-        let body: LoadAllEventsResponse = read_json(response).await;
-
-        assert_eq!(body.events.len(), 1);
-        assert_eq!(body.events[0].stream_id, "account-2");
-        assert_eq!(body.events[0].sequence, 2);
-    }
-
-    #[tokio::test]
-    async fn append_returns_stored_events_with_versions_and_sequences() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
-
-        let response = app
-            .oneshot(json_request(
-                "/events/append",
+                "/orm/update",
                 json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": {},
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
-            ))
-            .await
-            .unwrap();
-        let body: AppendEventsResponse = read_json(response).await;
-
-        assert_eq!(body.events.len(), 1);
-        assert_eq!(body.events[0].stream_id, "account-1");
-        assert_eq!(body.events[0].version, 1);
-        assert_eq!(body.events[0].sequence, 1);
-    }
-
-    #[tokio::test]
-    async fn latest_version_returns_zero_for_empty_streams_and_current_version_otherwise() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
-
-        let empty_response = app
-            .clone()
-            .oneshot(json_request(
-                "/events/latest-version",
-                json!({ "streamId": "account-1" }),
-            ))
-            .await
-            .unwrap();
-        let empty: LatestVersionResponse = read_json(empty_response).await;
-
-        app.clone()
-            .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": {},
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
-            ))
-            .await
-            .unwrap();
-
-        let loaded_response = app
-            .oneshot(json_request(
-                "/events/latest-version",
-                json!({ "streamId": "account-1" }),
-            ))
-            .await
-            .unwrap();
-        let loaded: LatestVersionResponse = read_json(loaded_response).await;
-
-        assert_eq!(empty.version, 0);
-        assert_eq!(loaded.version, 1);
-    }
-
-    #[tokio::test]
-    async fn version_conflicts_return_409() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
-
-        app.clone()
-            .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "opened",
-                            "payload": {},
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
-                }),
-            ))
-            .await
-            .unwrap();
-
-        let response = app
-            .oneshot(json_request(
-                "/events/append",
-                json!({
-                    "streamId": "account-1",
-                    "version": 0,
-                    "events": [
-                        {
-                            "event_type": "deposited",
-                            "payload": { "amount": 10 },
-                            "schema_version": 1,
-                            "metadata": null
-                        }
-                    ]
+                    "model": model,
+                    "id": "missing",
+                    "input": {
+                        "id": "missing",
+                        "email": "missing@example.com",
+                        "active": true
+                    }
                 }),
             ))
             .await
@@ -763,55 +424,71 @@ mod tests {
         let status = response.status();
         let body: ErrorResponse = read_json(response).await;
 
-        assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body.code, "version_conflict");
-        assert_eq!(
-            body.details,
-            Some(ErrorDetails {
-                stream_id: Some("account-1".into()),
-                expected_version: Some(0),
-                actual_version: Some(1),
-            })
-        );
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body.code, "not_found");
     }
 
     #[tokio::test]
     async fn end_to_end_http_service_serves_runtime_routes() {
-        let app = create_proxy_app("sqlite::memory:").await.unwrap();
+        let app = create_proxy_app("sqlite::memory:", None).await.unwrap();
         let (address, server) = spawn_test_server(app).await;
         let client = reqwest::Client::new();
+        let model = json!({
+            "name": "User",
+            "table": "users",
+            "fields": [
+                { "name": "id", "type": "string", "primaryKey": true },
+                { "name": "email", "type": "string" },
+                { "name": "active", "type": "boolean", "defaultValue": true }
+            ],
+            "indices": [],
+            "relations": []
+        });
 
-        let append_response = client
-            .post(format!("http://{address}/events/append"))
+        let push_response = client
+            .post(format!("http://{address}/orm/schema/push"))
+            .json(&json!({ "models": [model.clone()] }))
+            .send()
+            .await
+            .unwrap();
+        assert!(push_response.status().is_success());
+
+        let create_response = client
+            .post(format!("http://{address}/orm/create"))
             .json(&json!({
-                "streamId": "account-1",
-                "version": 0,
-                "events": [
-                    {
-                        "event_type": "opened",
-                        "payload": {},
-                        "schema_version": 1,
-                        "metadata": null
-                    }
-                ]
+                "model": model.clone(),
+                "input": {
+                    "id": "usr_1",
+                    "email": "alice@example.com",
+                    "active": true
+                }
             }))
             .send()
             .await
             .unwrap();
-        let append_body: AppendEventsResponse = append_response.json().await.unwrap();
+        assert_eq!(create_response.status(), StatusCode::NO_CONTENT);
 
-        let version_response = client
-            .post(format!("http://{address}/events/latest-version"))
-            .json(&json!({ "streamId": "account-1" }))
+        let find_many_response = client
+            .post(format!("http://{address}/orm/find-many"))
+            .json(&json!({
+                "model": model,
+                "options": {
+                    "where": { "email": "alice@example.com" }
+                }
+            }))
             .send()
             .await
             .unwrap();
-        let version_body: LatestVersionResponse = version_response.json().await.unwrap();
+        let find_many_body: Vec<serde_json::Map<String, serde_json::Value>> =
+            find_many_response.json().await.unwrap();
 
         server.abort();
 
-        assert_eq!(append_body.events[0].stream_id, "account-1");
-        assert_eq!(version_body.version, 1);
+        assert_eq!(find_many_body.len(), 1);
+        assert_eq!(
+            find_many_body[0].get("email"),
+            Some(&serde_json::Value::String("alice@example.com".into()))
+        );
     }
 
     fn json_request(path: &str, body: serde_json::Value) -> Request<Body> {

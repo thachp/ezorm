@@ -1,44 +1,30 @@
 # @ezorm/runtime-node
 
-`@ezorm/runtime-node` packages the Node.js runtime bindings used by Ezorm.
+`@ezorm/runtime-node` is the direct Node.js helper for Ezorm's relational ORM flow.
 
-## Current Runtime Behavior
+It wraps `@ezorm/orm` and preserves the same API surface for:
 
-- Direct SQLite flows still work through `@ezorm/orm`.
-- `createNodeRuntime({ connect })` uses the native Rust runtime for PostgreSQL, MySQL, and SQLite connections that specify pool settings.
-- The pooled runtime currently supports repository CRUD plus `pushSchema` / `pullSchema`.
-- Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the pooled runtime yet.
+- decorated models
+- repository CRUD
+- `query(...)`, joins, `include(...)`, `select(...)`
+- `load(...)` and `loadMany(...)`
+- `pushSchema`
+- `pullSchema`
 
-## Pool Options
+Supported direct connection URLs:
 
-```ts
-await createNodeRuntime({
-  connect: {
-    databaseUrl: "postgres://user:pass@localhost/ezorm",
-    pool: {
-      minConnections: 1,
-      maxConnections: 8,
-      acquireTimeoutMs: 5000,
-      idleTimeoutMs: 10000
-    }
-  }
-});
-```
+- `sqlite::memory:`
+- `sqlite:///absolute/path.db`
+- `postgres://...`
+- `postgresql://...`
+- `mysql://...`
+- `mssql://...`
+- `sqlserver://...`
 
-## Prebuilt Native Layout
-
-The package looks for prebuilt native bindings at:
-
-```text
-native/<target-triple>/ezorm_napi.node
-```
-
-The build script also writes a flat `native/ezorm_napi.node` copy for local
-development.
+Proxy-backed runtimes remain separate. Use `@ezorm/runtime-proxy` with `@ezorm/proxy-node` only when you specifically need the managed proxy flow.
 
 ## Build
 
 ```sh
 pnpm --dir packages/runtime-node run build
-pnpm --dir packages/runtime-node run build:native
 ```

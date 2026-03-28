@@ -31,6 +31,7 @@ pub struct OrmModelMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct OrmFieldMetadata {
     pub name: String,
     #[serde(rename = "type")]
@@ -76,7 +77,7 @@ pub struct OrmRelationMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct OrmFindManyOptions {
-    #[serde(default)]
+    #[serde(default, rename = "where", alias = "whereClause")]
     pub where_clause: Option<BTreeMap<String, Value>>,
     #[serde(default)]
     pub order_by: Option<OrmOrderBy>,

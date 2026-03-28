@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         idle_timeout_ms: parse_env_u64("EZORM_POOL_IDLE_TIMEOUT_MS")?,
     };
 
-    let app = ezorm_proxy::create_managed_proxy_app(&database_url, Some(pool_options)).await?;
+    let app = ezorm_proxy::create_proxy_app(&database_url, Some(pool_options)).await?;
     let listener = TcpListener::bind(format!("{host}:{port}")).await?;
 
     axum::serve(listener, app).await?;

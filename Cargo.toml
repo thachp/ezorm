@@ -1,14 +1,9 @@
 [workspace]
 members = [
-  "crates/engine",
-  "crates/event_store",
-  "crates/projections",
-  "crates/snapshots",
   "crates/orm_runtime",
   "crates/dialects",
   "crates/migrate",
-  "crates/proxy",
-  "crates/napi"
+  "crates/proxy"
 ]
 resolver = "2"
 

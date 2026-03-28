@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Field, Model, PrimaryKey } from "@ezorm/core";
-import { createNodeRuntime, detectNativeTargetTriple, shouldUseNativeRuntime } from "./index";
+import { createNodeRuntime } from "./index";
 
 describe("@ezorm/runtime-node", () => {
   let runtime: Awaited<ReturnType<typeof createNodeRuntime>> | undefined;
@@ -35,38 +35,36 @@ describe("@ezorm/runtime-node", () => {
     });
   });
 
-  it("maps supported platforms to packaged target triples", () => {
-    expect(detectNativeTargetTriple("darwin", "arm64")).toBe("aarch64-apple-darwin");
-    expect(detectNativeTargetTriple("linux", "x64")).toBe("x86_64-unknown-linux-gnu");
+  it("defaults to an in-memory sqlite runtime", async () => {
+    @Model({ table: "defaults" })
+    class DefaultRecord {
+      @PrimaryKey()
+      @Field.string()
+      id!: string;
+    }
+
+    runtime = await createNodeRuntime();
+    await runtime.pushSchema([DefaultRecord]);
+
+    await expect(
+      runtime.repository(DefaultRecord).create({ id: "default_1" })
+    ).resolves.toEqual({ id: "default_1" });
   });
 
-  it("fails fast on unsupported packaged targets", () => {
-    expect(() => detectNativeTargetTriple("freebsd", "x64")).toThrow(
-      "Unsupported native target for ezorm: freebsd/x64"
-    );
-  });
+  it("accepts relational database urls handled by @ezorm/orm", async () => {
+    const databaseUrl =
+      process.env.EZORM_TEST_POSTGRES_URL ??
+      process.env.EZORM_TEST_MYSQL_URL ??
+      process.env.EZORM_TEST_MSSQL_URL;
 
-  it("uses the native runtime for non-sqlite databases or pooled sqlite configs", () => {
-    expect(
-      shouldUseNativeRuntime({
-        databaseUrl: "postgres://localhost/ezorm"
-      })
-    ).toBe(true);
-    expect(
-      shouldUseNativeRuntime({
-        databaseUrl: "mysql://localhost/ezorm"
-      })
-    ).toBe(true);
-    expect(
-      shouldUseNativeRuntime({
-        databaseUrl: "sqlite://local.db",
-        pool: { maxConnections: 2 }
-      })
-    ).toBe(true);
-    expect(
-      shouldUseNativeRuntime({
-        databaseUrl: "sqlite::memory:"
-      })
-    ).toBe(false);
+    if (!databaseUrl) {
+      return;
+    }
+
+    runtime = await createNodeRuntime({
+      connect: { databaseUrl }
+    });
+
+    expect(runtime).toBeDefined();
   });
 });

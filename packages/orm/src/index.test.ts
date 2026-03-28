@@ -493,6 +493,7 @@ describe("@ezorm/orm", () => {
         .first()
     ).resolves.toEqual({ id: "post-3", tagLabel: "docs" });
   });
+
 });
 
 function defineAuthorModels() {
