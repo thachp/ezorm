@@ -27,6 +27,9 @@ switch (command) {
   case "read-version":
     process.stdout.write(`${assertWorkspaceVersionConsistency()}\n`);
     break;
+  case "release-status":
+    process.stdout.write(`${JSON.stringify(readReleaseStatus())}\n`);
+    break;
   case "build-js-packages":
     buildJsPackages();
     break;
@@ -48,6 +51,7 @@ switch (command) {
         "Usage:",
         "  node ./scripts/npm-release.mjs assert-workspace-version",
         "  node ./scripts/npm-release.mjs read-version",
+        "  node ./scripts/npm-release.mjs release-status",
         "  node ./scripts/npm-release.mjs build-js-packages",
         "  node ./scripts/npm-release.mjs pack-js-packages [outputDir]",
         "  node ./scripts/npm-release.mjs verify-unpublished",
@@ -55,6 +59,45 @@ switch (command) {
         "  node ./scripts/npm-release.mjs publish-artifacts [artifactsDir]"
       ].join("\n")
     );
+}
+
+function readReleaseStatus() {
+  const version = assertWorkspaceVersionConsistency();
+  const publishedPackages = [];
+  const unpublishedPackages = [];
+
+  for (const packageName of PUBLISH_ORDER) {
+    if (isPackageVersionPublished(packageName, version)) {
+      publishedPackages.push(packageName);
+      continue;
+    }
+
+    unpublishedPackages.push(packageName);
+  }
+
+  if (publishedPackages.length === 0) {
+    return {
+      version,
+      status: "unpublished",
+      shouldRelease: true,
+      publishedPackages,
+      unpublishedPackages
+    };
+  }
+
+  if (unpublishedPackages.length === 0) {
+    return {
+      version,
+      status: "published",
+      shouldRelease: false,
+      publishedPackages,
+      unpublishedPackages
+    };
+  }
+
+  throw new Error(
+    `Release version ${version} is partially published.\nPublished: ${publishedPackages.join(", ")}\nUnpublished: ${unpublishedPackages.join(", ")}`
+  );
 }
 
 function buildJsPackages() {
@@ -89,31 +132,13 @@ function packJsPackages(outputDir) {
 }
 
 function verifyUnpublishedPackages() {
-  const version = assertWorkspaceVersionConsistency();
+  const status = readReleaseStatus();
 
-  for (const packageName of PUBLISH_ORDER) {
-    const result = spawnSync("npm", ["view", `${packageName}@${version}`, "version", "--json"], {
-      cwd: rootDir,
-      encoding: "utf8"
-    });
-
-    if (result.status === 0) {
-      throw new Error(`Package ${packageName}@${version} is already published.`);
-    }
-
-    const output = `${result.stdout}\n${result.stderr}`;
-    const missingPackage =
-      output.includes("E404") ||
-      output.includes("404") ||
-      output.includes("is not in this registry") ||
-      output.includes("No match found");
-
-    if (!missingPackage) {
-      throw new Error(`Failed to check npm for ${packageName}@${version}:\n${output.trim()}`);
-    }
+  if (!status.shouldRelease) {
+    throw new Error(`Release version ${status.version} is already published.`);
   }
 
-  process.stdout.write(`Verified npm availability for ${version}\n`);
+  process.stdout.write(`Verified npm availability for ${status.version}\n`);
 }
 
 function packProxyBinary(args) {
@@ -191,6 +216,30 @@ function findTarballPath(rootSearchDir, filename) {
   }
 
   return matches[0];
+}
+
+function isPackageVersionPublished(packageName, version) {
+  const result = spawnSync("npm", ["view", `${packageName}@${version}`, "version", "--json"], {
+    cwd: rootDir,
+    encoding: "utf8"
+  });
+
+  if (result.status === 0) {
+    return true;
+  }
+
+  const output = `${result.stdout}\n${result.stderr}`;
+  const missingPackage =
+    output.includes("E404") ||
+    output.includes("404") ||
+    output.includes("is not in this registry") ||
+    output.includes("No match found");
+
+  if (missingPackage) {
+    return false;
+  }
+
+  throw new Error(`Failed to check npm for ${packageName}@${version}:\n${output.trim()}`);
 }
 
 function run(command, args, options = {}) {

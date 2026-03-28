@@ -1,7 +1,15 @@
 name: Release npm Packages
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/release-npm.yml"
+      - "packages/**/package.json"
+      - "scripts/npm-release.mjs"
+      - "scripts/npm-release-manifest.mjs"
+      - "scripts/proxy-packaging.mjs"
 
 concurrency:
   group: release-npm
@@ -15,7 +23,8 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.value }}
+      version: ${{ steps.release_status.outputs.version }}
+      should_release: ${{ steps.release_status.outputs.should_release }}
 
     steps:
       - name: Check out repository
@@ -28,25 +37,25 @@ jobs:
         with:
           node-version: 22
 
-      - name: Ensure release runs from main
+      - name: Read release status
+        id: release_status
         shell: bash
         run: |
-          if [ "${GITHUB_REF_NAME}" != "main" ]; then
-            echo "release-npm.yml can only publish from main" >&2
-            exit 1
-          fi
+          STATUS_JSON="$(node ./scripts/npm-release.mjs release-status)"
+          echo "json=${STATUS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'JSON.parse(process.argv[1]).version' "$STATUS_JSON")" >> "$GITHUB_OUTPUT"
+          echo "should_release=$(node -p 'JSON.parse(process.argv[1]).shouldRelease' "$STATUS_JSON")" >> "$GITHUB_OUTPUT"
 
-      - name: Read workspace version
-        id: version
-        shell: bash
-        run: echo "value=$(node ./scripts/npm-release.mjs read-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure target versions are not already published
-        run: node ./scripts/npm-release.mjs verify-unpublished
+      - name: Report skipped release
+        if: steps.release_status.outputs.should_release != 'true'
+        env:
+          VERSION: ${{ steps.release_status.outputs.version }}
+        run: echo "Release ${VERSION} is already published on npm; skipping build, publish, and tag."
 
   build_js_packages:
     runs-on: ubuntu-latest
     needs: preflight
+    if: needs.preflight.outputs.should_release == 'true'
 
     steps:
       - name: Check out repository
@@ -78,6 +87,7 @@ jobs:
 
   build_proxy_binaries:
     needs: preflight
+    if: needs.preflight.outputs.should_release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -120,6 +130,7 @@ jobs:
       - preflight
       - build_js_packages
       - build_proxy_binaries
+    if: needs.preflight.outputs.should_release == 'true'
 
     steps:
       - name: Check out repository
@@ -149,8 +160,13 @@ jobs:
           VERSION: ${{ needs.preflight.outputs.version }}
         shell: bash
         run: |
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null 2>&1; then
             echo "Tag v${VERSION} already exists" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists on origin" >&2
             exit 1
           fi
 

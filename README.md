@@ -1,6 +1,6 @@
 # ezorm
 
-`ezorm` is an ORM-first TypeScript workspace built around decorated models, small repository CRUD, explicit read queries, and an optional managed proxy runtime.
+Ezorm is a TypeScript ORM built around decorated models, repository CRUD, explicit read queries, and an optional managed proxy runtime.
 
 The practical path today is:
 
@@ -398,8 +398,8 @@ Ezorm keeps a few design choices explicit:
 Use the committed package manifests as the source of truth for npm releases.
 
 1. Update versions with `pnpm version:workspace <version>`.
-2. Commit the version bump on `main`.
-3. Trigger the `Release npm Packages` GitHub Actions workflow from `main`.
+2. Commit and merge the version bump to `main`.
+3. GitHub Actions publishes the npm packages automatically and pushes `v<version>` after the publish step succeeds.
 
 ## License
 
