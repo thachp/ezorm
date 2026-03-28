@@ -15,9 +15,10 @@ import type { CliCommand, EzormCliConfig } from "./index.js";
 
 const CONFIG_FILENAMES = ["ezorm.config.mjs", "ezorm.config.js", "ezorm.config.cjs"] as const;
 const MIGRATION_HISTORY_TABLE = "_ezorm_migrations";
-const nativeImport = new Function("specifier", "return import(specifier)") as (
-  specifier: string
-) => Promise<{ default?: EzormCliConfig }>;
+
+async function loadConfigModule(specifier: string): Promise<{ default?: EzormCliConfig }> {
+  return import(/* @vite-ignore */ specifier);
+}
 
 interface LoadedCliConfig extends EzormCliConfig {
   cwd: string;
@@ -266,7 +267,7 @@ async function loadCliConfig(cwd: string): Promise<LoadedCliConfig> {
     throw new Error(`Could not find an Ezorm config file in ${cwd}`);
   }
 
-  const configModule = await nativeImport(`${pathToFileURL(configPath).href}?t=${Date.now()}`);
+  const configModule = await loadConfigModule(`${pathToFileURL(configPath).href}?t=${Date.now()}`);
   const config = configModule.default;
   if (!config || typeof config !== "object") {
     throw new Error(`Config ${configPath} must export a default Ezorm config object`);
