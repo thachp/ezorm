@@ -1,27 +1,24 @@
 import { Module, type DynamicModule } from "@nestjs/common";
-import { TodoModel, type TodoDemoServices } from "@ezorm/example-todo-domain";
+import { TodoModel } from "@ezorm/example-todo-domain";
 import { EzormModule } from "@ezorm/nestjs";
-import { TODO_DEMO_SERVICES, TODO_REPOSITORY } from "./tokens";
 import { TodosController } from "./todos.controller";
+import { TodosService } from "./todos.service";
 
 @Module({})
 export class TodoApiModule {
-  static register(services: TodoDemoServices): DynamicModule {
+  static register(options?: { databaseUrl?: string }): DynamicModule {
     return {
       module: TodoApiModule,
       imports: [
         EzormModule.forRoot({
-          client: services.client,
-          repositories: [{ provide: TODO_REPOSITORY, model: TodoModel }]
-        })
+          connect: {
+            databaseUrl: options?.databaseUrl ?? "sqlite::memory:"
+          }
+        }),
+        EzormModule.forFeature([TodoModel])
       ],
       controllers: [TodosController],
-      providers: [
-        {
-          provide: TODO_DEMO_SERVICES,
-          useValue: services
-        }
-      ]
+      providers: [TodosService]
     };
   }
 }

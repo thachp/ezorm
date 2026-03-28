@@ -4,7 +4,11 @@ import {
   createTodoAction,
   reopenTodoAction
 } from "./actions";
-import { fetchTodos, type TodoListItem } from "../lib/todo-api";
+import {
+  listTodos,
+  todoDatabaseUrl,
+  type TodoRecord
+} from "../lib/todo-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +23,7 @@ function statusClass(kind: "error" | "status"): string {
     : "border-teal-300 bg-teal-50 text-teal-700";
 }
 
-function todoCardClass(todo: TodoListItem): string {
+function todoCardClass(todo: TodoRecord): string {
   return todo.completed
     ? "border-slate-200 bg-white/70 text-slate-500"
     : "border-teal-200 bg-white text-slate-900 shadow-sm";
@@ -34,11 +38,11 @@ export default async function Page({
   const status = firstValue(params?.status);
   const error = firstValue(params?.error);
 
-  let todos: TodoListItem[] = [];
+  let todos: TodoRecord[] = [];
   let loadError: string | undefined;
 
   try {
-    todos = await fetchTodos();
+    todos = await listTodos();
   } catch (cause) {
     loadError = cause instanceof Error ? cause.message : "Unable to load todos";
   }
@@ -54,15 +58,15 @@ export default async function Page({
             End-to-end ORM todo flow with a Tailwind frontend.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-            The Next.js app stays HTTP-only. NestJS owns the SQL-backed repository and exposes a
-            minimal CRUD-oriented REST API.
+            Server components and actions talk to the ORM directly through
+            `@ezorm/next/node`, while the same decorated model drives the SQL table.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-slate-600">
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
               Decorated models
             </span>
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
-              Repository writes
+              `@ezorm/next/node`
             </span>
             <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
               SQLite storage
@@ -76,7 +80,7 @@ export default async function Page({
         <div className="rounded-[2rem] border border-white/60 bg-slate-950 p-8 text-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
           <h2 className="text-lg font-semibold">Create a todo</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Writes go straight to the ORM repository and persist rows in the backing SQL table.
+            Writes go straight to a cached Next.js node runtime client and persist rows in `todos`.
           </p>
           <form action={createTodoAction} className="mt-6 space-y-4">
             <label className="block text-sm font-medium text-slate-200" htmlFor="title">
@@ -170,12 +174,16 @@ export default async function Page({
             <div>
               <dt className="text-xs uppercase tracking-[0.24em] text-slate-400">API base URL</dt>
               <dd className="mt-1 break-all text-slate-200">
-                {process.env.TODO_API_BASE_URL ?? "http://localhost:4000"}
+                {todoDatabaseUrl()}
               </dd>
             </div>
             <div>
+              <dt className="text-xs uppercase tracking-[0.24em] text-slate-400">Runtime</dt>
+              <dd className="mt-1">Direct Node ORM client cached through `@ezorm/next/node`.</dd>
+            </div>
+            <div>
               <dt className="text-xs uppercase tracking-[0.24em] text-slate-400">Persistence</dt>
-              <dd className="mt-1">SQLite-backed ORM client. The demo defaults to an in-memory database.</dd>
+              <dd className="mt-1">SQLite-backed ORM client. The demo defaults to an in-memory database, so restarts clear state.</dd>
             </div>
           </dl>
         </aside>

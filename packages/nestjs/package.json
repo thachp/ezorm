@@ -1,10 +1,12 @@
 {
   "name": "@ezorm/nestjs",
   "version": "0.1.0",
+  "description": "NestJS DI adapter for Ezorm ORM clients and repositories.",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@ezorm/orm": "0.1.0"
+    "@ezorm/orm": "0.1.0",
+    "@ezorm/runtime-node": "0.1.0"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0"

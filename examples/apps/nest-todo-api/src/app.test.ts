@@ -19,8 +19,9 @@ describe("@ezorm/example-nest-todo-api", () => {
 
     const createResponse = await request(app.getHttpServer())
       .post("/todos")
-      .send({ title: "Ship repository CRUD" })
-      .expect(201);
+      .send({ title: "Ship repository CRUD" });
+
+    expect(createResponse.status, createResponse.text).toBe(201);
 
     const todoId = createResponse.body.todo.id as string;
 
@@ -54,7 +55,5 @@ describe("@ezorm/example-nest-todo-api", () => {
         completed: false
       }
     ]);
-
-    await created.services.close();
   });
 });

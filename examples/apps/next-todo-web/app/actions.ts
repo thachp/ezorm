@@ -6,7 +6,7 @@ import {
   completeTodo,
   createTodo,
   reopenTodo
-} from "../lib/todo-api";
+} from "../lib/todo-store";
 
 function redirectWithQuery(key: "error" | "status", value: string): never {
   redirect(`/?${key}=${encodeURIComponent(value)}`);

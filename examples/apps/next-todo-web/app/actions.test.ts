@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect
 }));
 
-vi.mock("../lib/todo-api", () => ({
+vi.mock("../lib/todo-store", () => ({
   completeTodo: mocks.completeTodo,
   createTodo: mocks.createTodo,
   reopenTodo: mocks.reopenTodo
@@ -34,7 +34,7 @@ describe("@ezorm/example-next-todo-web actions", () => {
     vi.clearAllMocks();
   });
 
-  it("creates todos through the API and redirects with status", async () => {
+  it("creates todos through the ORM store and redirects with status", async () => {
     mocks.createTodo.mockResolvedValue({ todo: { id: "todo-1" } });
 
     const formData = new FormData();
@@ -45,7 +45,7 @@ describe("@ezorm/example-next-todo-web actions", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/");
   });
 
-  it("completes todos through the API and redirects with status", async () => {
+  it("completes todos through the ORM store and redirects with status", async () => {
     mocks.completeTodo.mockResolvedValue({ todo: { id: "todo-1" } });
 
     const formData = new FormData();

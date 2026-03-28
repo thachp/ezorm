@@ -1,11 +1,8 @@
-import { ProxyOrmClient } from "@ezorm/runtime-proxy";
-import { NEXT_EDGE_RUNTIME, assertEdgeSafeImport } from "./index";
+import { ProxyOrmClient, type ProxyOrmClientOptions } from "@ezorm/runtime-proxy";
+import { assertEdgeSafeImport } from "./index";
 
-export function createNextEdgeRuntime(endpoint: string) {
-  return {
-    runtime: NEXT_EDGE_RUNTIME,
-    client: new ProxyOrmClient({ endpoint })
-  };
+export function createNextEdgeClient(options: ProxyOrmClientOptions): ProxyOrmClient {
+  return new ProxyOrmClient(options);
 }
 
 export { assertEdgeSafeImport };

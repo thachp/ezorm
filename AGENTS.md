@@ -10,7 +10,7 @@
 - Proxy-backed cross-database execution still lives behind `packages/runtime-proxy`, `packages/proxy-node`, `crates/orm_runtime`, and the managed proxy binary.
 - Runnable examples live under `examples/apps`, and shared example-only code lives under `examples/packages`.
 - The maintained todo examples use decorated models plus repository CRUD over SQLite-backed storage; the demo defaults to `sqlite::memory:` so process restarts clear data.
-- The HTTP runtime proxy lives in `crates/proxy`, packaged Node-side lifecycle management lives in `packages/proxy-node`, and edge-facing TypeScript clients should use `packages/runtime-proxy` plus `packages/next/node` or `packages/proxy-node` instead of documenting manual Cargo startup.
+- The HTTP runtime proxy lives in `crates/proxy`, packaged Node-side lifecycle management lives in `packages/proxy-node`, Next.js Node runtimes should use `packages/next/node` for direct ORM clients, and edge-facing TypeScript clients should use `packages/runtime-proxy` plus `packages/next/edge` or `packages/proxy-node` instead of documenting manual Cargo startup.
 - Keep workflow documentation aligned with the actual workspace surface before adding new commands, adapters, or schema behavior.
 
 ## Preferred Workflow
@@ -18,7 +18,7 @@
 - Inspect the current package, crate, and CLI surface before adding a new workflow command or query.
 - Prefer the root validation commands that already exist: `pnpm typecheck`, `pnpm test:ts`, `pnpm test`, and `cargo test`.
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared ORM/repository helpers instead of reimplementing it inline.
-- Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/node`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
+- Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/edge`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
 
 ## Common Commands
@@ -80,7 +80,7 @@ Current example workflows:
 - Keep docs aligned with the ORM-first surface. Do not reintroduce alternate non-ORM workflows into maintained examples or top-level documentation.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
 - Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.
-- The todo examples intentionally default to SQLite in-memory storage in v1, so docs should note that Nest restarts clear state.
+- The todo examples intentionally default to SQLite in-memory storage in v1, so docs should note that process restarts clear state.
 
 ## Commit Guidelines
 

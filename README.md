@@ -7,7 +7,7 @@
 > - `@ezorm/core` + `@ezorm/orm` are the primary application path.
 > - The `ezorm` CLI surface is implemented, but most commands still print queued/demo output.
 > - The Nest and Next todo examples are the best end-to-end references today.
-> - The example ORM flow defaults to SQLite in-memory, so restarting the Nest API clears data.
+> - The example ORM flow defaults to SQLite in-memory, so restarting the example processes clears data.
 
 ## Why Ezorm Is Different
 
@@ -52,8 +52,8 @@ If you have never used this library before, use this order:
 | Define model metadata with decorators | `npm install @ezorm/core` |
 | Persist models with repository CRUD | `npm install @ezorm/orm` |
 | Add a Node.js runtime helper | `npm install @ezorm/runtime-node` |
-| Add Next.js helpers | `npm install @ezorm/next` |
-| Add NestJS wiring | `npm install @ezorm/nestjs` |
+| Add the Next.js ORM adapter | `npm install @ezorm/next` |
+| Add the NestJS ORM adapter | `npm install @ezorm/nestjs` |
 
 ## Try The CLI In 30 Seconds
 
@@ -326,8 +326,38 @@ Once your model/repository flow is in place, pick the adapter that matches your 
 - `@ezorm/runtime-node` for direct local SQLite Node.js usage
 - `@ezorm/runtime-proxy` plus `@ezorm/proxy-node` when you need pooled or cross-database ORM transport
 - `@ezorm/next`
-  Use `@ezorm/next/node` for Next.js code running on the Node.js runtime, or `@ezorm/next/edge` when edge code must talk to an HTTP endpoint.
+  Use `@ezorm/next/node` to create or reuse a cached direct ORM client in server components, route handlers, and server actions. Use `@ezorm/next/edge` only when edge code must talk to an HTTP proxy endpoint.
 - `@ezorm/nestjs`
+  Use `EzormModule.forRoot(...)` and `EzormModule.forFeature([...])` to wire an `OrmClient` and repositories into Nest DI.
+
+Minimal Next.js node usage:
+
+```ts
+import { getNextNodeClient } from "@ezorm/next/node";
+
+const client = await getNextNodeClient({
+  cacheKey: "app",
+  connect: { databaseUrl: "sqlite::memory:" }
+});
+```
+
+Minimal NestJS usage:
+
+```ts
+import { Module } from "@nestjs/common";
+import { EzormModule, InjectEzormRepository } from "@ezorm/nestjs";
+import { Todo } from "./todo.model";
+
+@Module({
+  imports: [
+    EzormModule.forRoot({
+      connect: { databaseUrl: "sqlite::memory:" }
+    }),
+    EzormModule.forFeature([Todo])
+  ]
+})
+export class AppModule {}
+```
 
 The maintained examples live here:
 
@@ -337,7 +367,7 @@ The maintained examples live here:
 
 ## Notes
 
-The maintained product path is `@ezorm/core` + `@ezorm/orm`, with `@ezorm/runtime-proxy` as the optional pooled transport. The examples, adapters, and CLI in this repository are intentionally centered on simple ORM-style CRUD workflows.
+The maintained product path is `@ezorm/core` + `@ezorm/orm`, with `@ezorm/runtime-proxy` as the optional pooled transport. The examples, adapters, and CLI in this repository are intentionally centered on simple ORM-style CRUD workflows with direct framework integration instead of CQRS-style indirection.
 
 ## License
 

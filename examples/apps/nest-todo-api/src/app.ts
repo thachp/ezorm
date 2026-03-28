@@ -1,14 +1,9 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import {
-  createTodoDemoServices,
-  type TodoDemoServices
-} from "@ezorm/example-todo-domain";
 import { TodoApiModule } from "./todo-api.module";
 
-export async function createTodoApiApplication(services?: TodoDemoServices) {
-  const resolvedServices = services ?? (await createTodoDemoServices());
-  const app = await NestFactory.create(TodoApiModule.register(resolvedServices), {
+export async function createTodoApiApplication(options?: { databaseUrl?: string }) {
+  const app = await NestFactory.create(TodoApiModule.register(options), {
     logger: false
   });
 
@@ -24,8 +19,5 @@ export async function createTodoApiApplication(services?: TodoDemoServices) {
     })
   );
 
-  return {
-    app,
-    services: resolvedServices
-  };
+  return { app };
 }

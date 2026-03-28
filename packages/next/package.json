@@ -1,8 +1,10 @@
 {
   "name": "@ezorm/next",
   "version": "0.1.0",
+  "description": "Next.js adapters for direct Ezorm node clients and proxy-backed edge clients.",
   "type": "module",
   "dependencies": {
+    "@ezorm/orm": "0.1.0",
     "@ezorm/proxy-node": "0.1.0",
     "@ezorm/runtime-node": "0.1.0",
     "@ezorm/runtime-proxy": "0.1.0"

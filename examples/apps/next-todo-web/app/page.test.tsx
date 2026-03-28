@@ -1,14 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TodoListItem } from "../lib/todo-api";
+import type { TodoRecord } from "../lib/todo-store";
 
 const mocks = vi.hoisted(() => ({
   completeTodo: vi.fn(),
   createTodo: vi.fn(),
-  fetchTodos: vi.fn<() => Promise<TodoListItem[]>>(),
+  listTodos: vi.fn<() => Promise<TodoRecord[]>>(),
   redirect: vi.fn(),
   revalidatePath: vi.fn(),
-  reopenTodo: vi.fn()
+  reopenTodo: vi.fn(),
+  todoDatabaseUrl: vi.fn(() => "sqlite::memory:")
 }));
 
 vi.mock("next/cache", () => ({
@@ -19,11 +20,12 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect
 }));
 
-vi.mock("../lib/todo-api", () => ({
+vi.mock("../lib/todo-store", () => ({
   completeTodo: mocks.completeTodo,
   createTodo: mocks.createTodo,
-  fetchTodos: mocks.fetchTodos,
-  reopenTodo: mocks.reopenTodo
+  listTodos: mocks.listTodos,
+  reopenTodo: mocks.reopenTodo,
+  todoDatabaseUrl: mocks.todoDatabaseUrl
 }));
 
 import Page from "./page";
@@ -34,7 +36,7 @@ describe("@ezorm/example-next-todo-web page", () => {
   });
 
   it("renders todos returned by the API", async () => {
-    mocks.fetchTodos.mockResolvedValue([
+    mocks.listTodos.mockResolvedValue([
       {
         id: "todo-1",
         title: "Drive ORM demo",
@@ -49,10 +51,10 @@ describe("@ezorm/example-next-todo-web page", () => {
   });
 
   it("renders load failures as error banners", async () => {
-    mocks.fetchTodos.mockRejectedValue(new Error("API offline"));
+    mocks.listTodos.mockRejectedValue(new Error("Database offline"));
 
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
 
-    expect(html).toContain("API offline");
+    expect(html).toContain("Database offline");
   });
 });
