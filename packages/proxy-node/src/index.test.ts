@@ -106,6 +106,37 @@ describe("@ezorm/proxy-node", () => {
     await handle.close();
   });
 
+  it("forwards pool settings through environment variables", async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true
+      })
+    );
+
+    const handle = await ensureEzormProxy({
+      databaseUrl: "postgres://localhost/ezorm",
+      port: 4620,
+      binaryPath: "/tmp/ezorm_proxy",
+      pool: {
+        minConnections: 1,
+        maxConnections: 8,
+        acquireTimeoutMs: 5000,
+        idleTimeoutMs: 10000
+      }
+    });
+
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { env: Record<string, string> }];
+    expect(spawnOptions.env.EZORM_POOL_MIN_CONNECTIONS).toBe("1");
+    expect(spawnOptions.env.EZORM_POOL_MAX_CONNECTIONS).toBe("8");
+    expect(spawnOptions.env.EZORM_POOL_ACQUIRE_TIMEOUT_MS).toBe("5000");
+    expect(spawnOptions.env.EZORM_POOL_IDLE_TIMEOUT_MS).toBe("10000");
+
+    await handle.close();
+  });
+
   it("times out cleanly when the proxy never becomes healthy", async () => {
     const child = new FakeChildProcess();
     spawnMock.mockReturnValue(child);

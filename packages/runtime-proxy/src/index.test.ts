@@ -31,7 +31,19 @@ describe("@ezorm/runtime-proxy", () => {
       "http://runtime.internal/orm/find-by-id",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ table: "users", id: "usr_1" })
+        body: JSON.stringify({
+          model: {
+            name: "User",
+            table: "users",
+            fields: [
+              { name: "id", type: "string", primaryKey: true },
+              { name: "email", type: "string" }
+            ],
+            indices: [],
+            relations: []
+          },
+          id: "usr_1"
+        })
       })
     );
   });
@@ -50,7 +62,16 @@ describe("@ezorm/runtime-proxy", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          table: "users",
+          model: {
+            name: "User",
+            table: "users",
+            fields: [
+              { name: "id", type: "string", primaryKey: true },
+              { name: "email", type: "string" }
+            ],
+            indices: [],
+            relations: []
+          },
           options: {
             where: { email: "alice@example.com" },
             orderBy: { field: "email", direction: "asc" }
@@ -93,7 +114,7 @@ describe("@ezorm/runtime-proxy", () => {
         .select<{ email: string }>({ email: "email" })
         .all()
     ).rejects.toThrow(
-      "@ezorm/runtime-proxy does not support relation-aware queries or loaders yet"
+      "@ezorm/runtime-proxy does not support relation-aware queries or loaders on the pooled SQL runtime yet."
     );
   });
 });

@@ -5,6 +5,7 @@
 - TypeScript workspace commands live at the repository root via `pnpm`.
 - Rust workspace validation lives at the repository root via `cargo`.
 - Model metadata primitives live in `packages/core`, and the primary ORM/runtime workflow lives in `packages/orm`.
+- Direct `@ezorm/orm` execution remains SQLite-only; pooled relational ORM execution for SQLite, PostgreSQL, and MySQL now lives behind `packages/runtime-node`, `packages/runtime-proxy`, `crates/orm_runtime`, and the managed proxy binary.
 - Runnable examples live under `examples/apps`, and shared example-only code lives under `examples/packages`.
 - The maintained todo examples use decorated models plus repository CRUD over SQLite-backed storage; the demo defaults to `sqlite::memory:` so process restarts clear data.
 - The HTTP runtime proxy lives in `crates/proxy`, packaged Node-side lifecycle management lives in `packages/proxy-node`, and edge-facing TypeScript clients should use `packages/runtime-proxy` plus `packages/next/node` or `packages/proxy-node` instead of documenting manual Cargo startup.
@@ -61,10 +62,12 @@ Current example workflows:
 
 - New public application workflows should be modeled around decorated models and repository CRUD.
 - `@ezorm/core` owns metadata, validation, indices, and relation declarations.
-- `@ezorm/orm` owns schema push/pull and CRUD behavior through repositories.
+- `@ezorm/orm` owns the direct SQLite ORM plus the shared TypeScript metadata/validation contract used by the runtime-backed adapters.
+- `@ezorm/runtime-node` and `@ezorm/runtime-proxy` currently support repository CRUD plus `pushSchema` / `pullSchema` for SQLite, PostgreSQL, and MySQL through the Rust runtime layer.
 - Keep primary key handling simple in v1: application-supplied keys and single-column primary keys only.
 - Relation-aware reads should go through explicit key-mapped `BelongsTo`, `HasMany`, or `ManyToMany` metadata plus `client.query(...)` for lazy query entities or explicit `load(...)` / `loadMany(...)` for plain repository objects.
 - Query-scoped implicit lazy loading and projection `select()` are now intentional ORM features. Keep lazy relation properties scoped to `client.query(...)` results and keep `select()` in flat projection mode rather than mixing it into repository CRUD flows.
+- Relation-aware `query(...)`, `load(...)`, and `loadMany(...)` are not implemented on the pooled SQL runtime yet; do not document them as cross-database features.
 - CLI and adapters should route through shared ORM client/repository helpers instead of embedding SQL logic inline.
 
 ## Guardrails

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Field, Model, PrimaryKey } from "@ezorm/core";
-import { createNodeRuntime, detectNativeTargetTriple } from "./index";
+import { createNodeRuntime, detectNativeTargetTriple, shouldUseNativeRuntime } from "./index";
 
 describe("@ezorm/runtime-node", () => {
   let runtime: Awaited<ReturnType<typeof createNodeRuntime>> | undefined;
@@ -44,5 +44,29 @@ describe("@ezorm/runtime-node", () => {
     expect(() => detectNativeTargetTriple("freebsd", "x64")).toThrow(
       "Unsupported native target for ezorm: freebsd/x64"
     );
+  });
+
+  it("uses the native runtime for non-sqlite databases or pooled sqlite configs", () => {
+    expect(
+      shouldUseNativeRuntime({
+        databaseUrl: "postgres://localhost/ezorm"
+      })
+    ).toBe(true);
+    expect(
+      shouldUseNativeRuntime({
+        databaseUrl: "mysql://localhost/ezorm"
+      })
+    ).toBe(true);
+    expect(
+      shouldUseNativeRuntime({
+        databaseUrl: "sqlite://local.db",
+        pool: { maxConnections: 2 }
+      })
+    ).toBe(true);
+    expect(
+      shouldUseNativeRuntime({
+        databaseUrl: "sqlite::memory:"
+      })
+    ).toBe(false);
   });
 });

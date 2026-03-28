@@ -1,6 +1,7 @@
 use std::{env, error::Error, io};
 
 use tokio::net::TcpListener;
+use ezorm_orm_runtime::RelationalPoolOptions;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -20,10 +21,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, error.to_string()).into())
         }
     };
+    let pool_options = RelationalPoolOptions {
+        min_connections: parse_env_u32("EZORM_POOL_MIN_CONNECTIONS")?,
+        max_connections: parse_env_u32("EZORM_POOL_MAX_CONNECTIONS")?,
+        acquire_timeout_ms: parse_env_u64("EZORM_POOL_ACQUIRE_TIMEOUT_MS")?,
+        idle_timeout_ms: parse_env_u64("EZORM_POOL_IDLE_TIMEOUT_MS")?,
+    };
 
-    let app = ezorm_proxy::create_proxy_app(&database_url).await?;
+    let app = ezorm_proxy::create_managed_proxy_app(&database_url, Some(pool_options)).await?;
     let listener = TcpListener::bind(format!("{host}:{port}")).await?;
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+fn parse_env_u32(name: &str) -> Result<Option<u32>, io::Error> {
+    match env::var(name) {
+        Ok(value) => value
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+    }
+}
+
+fn parse_env_u64(name: &str) -> Result<Option<u64>, io::Error> {
+    match env::var(name) {
+        Ok(value) => value
+            .parse::<u64>()
+            .map(Some)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(io::Error::new(io::ErrorKind::InvalidInput, error.to_string())),
+    }
 }

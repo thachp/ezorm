@@ -1,6 +1,9 @@
 use napi::bindgen_prelude::Result as NapiResult;
 use napi::Error;
 use napi_derive::napi;
+use ezorm_orm_runtime::{
+    OrmFindManyOptions, OrmModelMetadata, RelationalPoolOptions, SqlOrmRuntime,
+};
 use serde::{Deserialize, Serialize};
 use ezorm_event_store::{EventRecord, NewEvent, SqlEventStore};
 use ezorm_projections::{CheckpointStore, ProjectionCheckpoint, SqlCheckpointStore};
@@ -49,11 +52,20 @@ pub struct NativeProjectionCheckpoint {
     pub last_sequence: u32,
 }
 
+#[napi(object)]
+pub struct NativePoolOptions {
+    pub min_connections: Option<u32>,
+    pub max_connections: Option<u32>,
+    pub acquire_timeout_ms: Option<u32>,
+    pub idle_timeout_ms: Option<u32>,
+}
+
 #[napi]
 pub struct NativeEzormRuntime {
     runtime: Runtime,
     store: SqlEventStore,
     checkpoints: SqlCheckpointStore,
+    orm: SqlOrmRuntime,
 }
 
 #[napi]
@@ -142,11 +154,90 @@ impl NativeEzormRuntime {
             .block_on(self.checkpoints.reset(&projector))
             .map_err(to_napi_error)
     }
+
+    #[napi]
+    pub fn create(&self, model_json: String, input_json: String) -> NapiResult<()> {
+        let model: OrmModelMetadata = serde_json::from_str(&model_json).map_err(to_napi_error)?;
+        let input = serde_json::from_str(&input_json).map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.create(&model, &input))
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "findById")]
+    pub fn find_by_id(&self, model_json: String, id: String) -> NapiResult<Option<String>> {
+        let model: OrmModelMetadata = serde_json::from_str(&model_json).map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.find_by_id(&model, &id))
+            .map(|record| record.map(|item| serde_json::to_string(&item).expect("record should serialize")))
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "findMany")]
+    pub fn find_many(&self, model_json: String, options_json: Option<String>) -> NapiResult<String> {
+        let model: OrmModelMetadata = serde_json::from_str(&model_json).map_err(to_napi_error)?;
+        let options = options_json
+            .map(|item| serde_json::from_str::<OrmFindManyOptions>(&item))
+            .transpose()
+            .map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.find_many(&model, options))
+            .and_then(|records| serde_json::to_string(&records).map_err(Into::into))
+            .map_err(to_napi_error)
+    }
+
+    #[napi]
+    pub fn update(&self, model_json: String, id: String, input_json: String) -> NapiResult<()> {
+        let model: OrmModelMetadata = serde_json::from_str(&model_json).map_err(to_napi_error)?;
+        let input = serde_json::from_str(&input_json).map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.update(&model, &id, &input))
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "deleteRecord")]
+    pub fn delete_record(&self, model_json: String, id: String) -> NapiResult<()> {
+        let model: OrmModelMetadata = serde_json::from_str(&model_json).map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.delete(&model, &id))
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "pushSchema")]
+    pub fn push_schema(&self, models_json: String) -> NapiResult<Vec<String>> {
+        let models: Vec<OrmModelMetadata> =
+            serde_json::from_str(&models_json).map_err(to_napi_error)?;
+        self.runtime
+            .block_on(self.orm.push_schema(&models))
+            .map_err(to_napi_error)
+    }
+
+    #[napi(js_name = "pullSchema")]
+    pub fn pull_schema(&self) -> NapiResult<String> {
+        self.runtime
+            .block_on(self.orm.pull_schema())
+            .and_then(|schema| serde_json::to_string(&schema).map_err(Into::into))
+            .map_err(to_napi_error)
+    }
+
+    #[napi]
+    pub fn close(&self) -> NapiResult<()> {
+        Ok(())
+    }
 }
 
 #[napi]
-pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeEzormRuntime> {
+pub fn connect_native_runtime(
+    database_url: String,
+    pool_options: Option<NativePoolOptions>,
+) -> NapiResult<NativeEzormRuntime> {
     let runtime = Runtime::new().map_err(to_napi_error)?;
+    let orm = runtime
+        .block_on(SqlOrmRuntime::connect(
+            &database_url,
+            pool_options.map(RelationalPoolOptions::from),
+        ))
+        .map_err(to_napi_error)?;
     let store = runtime
         .block_on(SqlEventStore::connect(&database_url))
         .map_err(to_napi_error)?;
@@ -158,6 +249,7 @@ pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeEzormRun
         runtime,
         store,
         checkpoints,
+        orm,
     })
 }
 
@@ -208,6 +300,17 @@ impl From<NativeProjectionCheckpoint> for ProjectionCheckpoint {
         Self {
             projector: value.projector,
             last_sequence: value.last_sequence as u64,
+        }
+    }
+}
+
+impl From<NativePoolOptions> for RelationalPoolOptions {
+    fn from(value: NativePoolOptions) -> Self {
+        Self {
+            min_connections: value.min_connections,
+            max_connections: value.max_connections,
+            acquire_timeout_ms: value.acquire_timeout_ms.map(u64::from),
+            idle_timeout_ms: value.idle_timeout_ms.map(u64::from),
         }
     }
 }

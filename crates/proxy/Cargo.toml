@@ -9,6 +9,7 @@ axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ezorm_event_store = { path = "../event_store" }
+ezorm_orm_runtime = { path = "../orm_runtime" }
 thiserror.workspace = true
 tokio.workspace = true
 

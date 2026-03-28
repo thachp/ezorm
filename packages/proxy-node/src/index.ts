@@ -11,6 +11,14 @@ export interface EnsureEzormProxyOptions {
   port?: number;
   startupTimeoutMs?: number;
   binaryPath?: string;
+  pool?: EzormProxyPoolOptions;
+}
+
+export interface EzormProxyPoolOptions {
+  minConnections?: number;
+  maxConnections?: number;
+  acquireTimeoutMs?: number;
+  idleTimeoutMs?: number;
 }
 
 export interface EzormProxyHandle {
@@ -53,7 +61,8 @@ export async function ensureEzormProxy(
     binaryPath: options.binaryPath ?? null,
     databaseUrl,
     host,
-    port: options.port ?? null
+    port: options.port ?? null,
+    pool: options.pool ?? null
   });
 
   let managedPromise = activeProxyPromises.get(key);
@@ -170,7 +179,11 @@ async function startManagedProxy(
       ...process.env,
       DATABASE_URL: options.databaseUrl,
       HOST: options.host,
-      PORT: String(port)
+      PORT: String(port),
+      EZORM_POOL_MIN_CONNECTIONS: stringifyEnvNumber(options.pool?.minConnections),
+      EZORM_POOL_MAX_CONNECTIONS: stringifyEnvNumber(options.pool?.maxConnections),
+      EZORM_POOL_ACQUIRE_TIMEOUT_MS: stringifyEnvNumber(options.pool?.acquireTimeoutMs),
+      EZORM_POOL_IDLE_TIMEOUT_MS: stringifyEnvNumber(options.pool?.idleTimeoutMs)
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -225,6 +238,10 @@ async function startManagedProxy(
     endpoint,
     close
   };
+}
+
+function stringifyEnvNumber(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : String(value);
 }
 
 function localDevelopmentCandidates(executableName: string): string[] {

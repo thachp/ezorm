@@ -1,12 +1,13 @@
-import { getModelMetadata } from "@ezorm/core";
 import type {
-  FindManyOptions,
   ModelClass,
   OrmClient,
-  ProjectionQueryBuilder,
   QueryBuilder,
   Repository,
   TableSchema
+} from "@ezorm/orm";
+import {
+  createRuntimeOrmClient,
+  type RuntimeOrmExecutor
 } from "@ezorm/orm";
 
 export interface ProxyOrmClientOptions {
@@ -31,90 +32,70 @@ export class ProxyRuntimeError extends Error {
 }
 
 export class ProxyOrmClient implements OrmClient {
-  private readonly endpoint: string;
-  private readonly fetchImpl: typeof fetch;
+  private readonly client: OrmClient;
 
   constructor(options: ProxyOrmClientOptions) {
-    this.endpoint = options.endpoint.replace(/\/$/, "");
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    const endpoint = options.endpoint.replace(/\/$/, "");
+    const fetchImpl = options.fetchImpl ?? fetch;
+    const executor: RuntimeOrmExecutor = {
+      create: (model, input) => this.post(fetchImpl, endpoint, "/orm/create", { model, input }),
+      findById: (model, id) =>
+        this.post<Record<string, unknown> | null>(fetchImpl, endpoint, "/orm/find-by-id", {
+          model,
+          id
+        }).then((record) => record ?? undefined),
+      findMany: (model, queryOptions) =>
+        this.post(fetchImpl, endpoint, "/orm/find-many", { model, options: queryOptions }),
+      update: (model, id, input) =>
+        this.post(fetchImpl, endpoint, "/orm/update", { model, id, input }),
+      delete: (model, id) => this.post(fetchImpl, endpoint, "/orm/delete", { model, id }),
+      pushSchema: (models) => this.post(fetchImpl, endpoint, "/orm/schema/push", { models }),
+      pullSchema: () => this.post(fetchImpl, endpoint, "/orm/schema/pull", {}),
+      close: async () => undefined
+    };
+
+    this.client = createRuntimeOrmClient(executor, unsupportedRelationError().message);
   }
 
   repository<T extends object>(model: ModelClass<T>): Repository<T> {
-    const metadata = getModelMetadata(model);
-    const primaryKey = metadata.fields.find((field) => field.primaryKey);
-
-    if (!primaryKey) {
-      throw new Error(`Model ${metadata.name} must declare a primary key`);
-    }
-
-    return {
-      create: (input) =>
-        this.post<T>("/orm/create", {
-          table: metadata.table,
-          input
-        }),
-      findById: (id) =>
-        this.post<T | undefined>("/orm/find-by-id", {
-          table: metadata.table,
-          id
-        }),
-      findMany: (options?: FindManyOptions<T>) =>
-        this.post<T[]>("/orm/find-many", {
-          table: metadata.table,
-          options
-        }),
-      update: (id, patch) =>
-        this.post<T>("/orm/update", {
-          table: metadata.table,
-          id,
-          patch
-        }),
-      delete: async (id) => {
-        await this.post<void>("/orm/delete", {
-          table: metadata.table,
-          id,
-          primaryKey: primaryKey.name
-        });
-      }
-    };
+    return this.client.repository(model);
   }
 
-  query<T extends object>(_model: ModelClass<T>): QueryBuilder<T> {
-    return new UnsupportedProxyQueryBuilder<T>();
+  query<T extends object>(model: ModelClass<T>): QueryBuilder<T> {
+    return this.client.query(model);
   }
 
-  async load<T extends object>(
-    _model: ModelClass<T>,
-    _entity: T,
-    _relationName: string
-  ): Promise<unknown> {
-    throw unsupportedRelationError();
+  load<T extends object>(model: ModelClass<T>, entity: T, relationName: string): Promise<unknown> {
+    return this.client.load(model, entity, relationName);
   }
 
-  async loadMany<T extends object>(
-    _model: ModelClass<T>,
-    _entities: T[],
-    _relationName: string
+  loadMany<T extends object>(
+    model: ModelClass<T>,
+    entities: T[],
+    relationName: string
   ): Promise<T[]> {
-    throw unsupportedRelationError();
+    return this.client.loadMany(model, entities, relationName);
   }
 
-  async pushSchema(models: Function[]): Promise<{ statements: string[] }> {
-    return this.post("/orm/schema/push", {
-      models: models.map((model) => getModelMetadata(model))
-    });
+  pushSchema(models: Function[]): Promise<{ statements: string[] }> {
+    return this.client.pushSchema(models);
   }
 
-  async pullSchema(): Promise<TableSchema[]> {
-    return this.post("/orm/schema/pull", {});
+  pullSchema(): Promise<TableSchema[]> {
+    return this.client.pullSchema();
   }
 
-  async close(): Promise<void> {
-    return undefined;
+  close(): Promise<void> {
+    return this.client.close();
   }
 
-  private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    const response = await this.fetchImpl(`${this.endpoint}${path}`, {
+  private async post<T>(
+    fetchImpl: typeof fetch,
+    endpoint: string,
+    path: string,
+    body: Record<string, unknown>
+  ): Promise<T> {
+    const response = await fetchImpl(`${endpoint}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
@@ -143,50 +124,6 @@ export class ProxyOrmClient implements OrmClient {
   }
 }
 
-class UnsupportedProxyQueryBuilder<T extends object> implements QueryBuilder<T> {
-  where(): QueryBuilder<T> {
-    return this;
-  }
-
-  orderBy(): QueryBuilder<T> {
-    return this;
-  }
-
-  limit(): QueryBuilder<T> {
-    return this;
-  }
-
-  offset(): QueryBuilder<T> {
-    return this;
-  }
-
-  join(): QueryBuilder<T> {
-    return this;
-  }
-
-  leftJoin(): QueryBuilder<T> {
-    return this;
-  }
-
-  include(): QueryBuilder<T> {
-    return this;
-  }
-
-  select<Row extends object>(
-    _shape: Record<Extract<keyof Row, string>, string>
-  ): ProjectionQueryBuilder<Row> {
-    return this as unknown as ProjectionQueryBuilder<Row>;
-  }
-
-  async all(): Promise<T[]> {
-    throw unsupportedRelationError();
-  }
-
-  async first(): Promise<T | undefined> {
-    throw unsupportedRelationError();
-  }
-}
-
 function parseProxyRuntimeError(rawBody: string): ProxyRuntimeErrorBody | undefined {
   if (!rawBody) {
     return undefined;
@@ -205,6 +142,6 @@ function parseProxyRuntimeError(rawBody: string): ProxyRuntimeErrorBody | undefi
 
 function unsupportedRelationError(): Error {
   return new Error(
-    "@ezorm/runtime-proxy does not support relation-aware queries or loaders yet. Use @ezorm/runtime-node for the current SQLite-backed implementation."
+    "@ezorm/runtime-proxy does not support relation-aware queries or loaders on the pooled SQL runtime yet."
   );
 }
