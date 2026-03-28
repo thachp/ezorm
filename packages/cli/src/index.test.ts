@@ -570,7 +570,7 @@ async function ensureCliBuild(): Promise<void> {
     return;
   }
 
-  const result = spawnSync("pnpm", ["--dir", "packages/cli", "run", "build"], {
+  const result = spawnSync("pnpm", ["build:ezorm"], {
     cwd: originalCwd,
     encoding: "utf8"
   });

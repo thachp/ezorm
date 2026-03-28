@@ -7,7 +7,7 @@
     "build": "pnpm build:ts",
     "build:packages": "node ./scripts/npm-release.mjs build-js-packages",
     "build:proxy-node": "pnpm --dir packages/proxy-node run build",
-    "build:ezorm": "pnpm --dir packages/cli run build",
+    "build:ezorm": "pnpm --dir packages/core run build && pnpm --dir packages/orm run build && pnpm --dir packages/cli run build",
     "build:ts": "tsc -p tsconfig.json",
     "example:build": "pnpm --filter @ezorm/example-todo-domain test && pnpm --filter @ezorm/example-nest-todo-api build && pnpm --filter @ezorm/example-next-todo-web build",
     "example:nest:dev": "pnpm --filter @ezorm/example-nest-todo-api dev",
