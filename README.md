@@ -9,6 +9,30 @@
 > - The Nest and Next todo examples are the best end-to-end references today.
 > - The example ORM flow defaults to SQLite in-memory, so restarting the Nest API clears data.
 
+## Why Ezorm Is Different
+
+Ezorm is intentionally split into a small TypeScript ORM surface and a Rust-backed relational runtime surface instead of treating every environment as the same deployment target. `@ezorm/core` keeps model metadata, validation, indices, and relations in decorated TypeScript classes, and `@ezorm/orm` builds a focused repository and read-query API on top of that model layer. Today, the main TypeScript ORM path is SQLite-only through `node:sqlite`, while the Rust relational components handle pooled SQL connections for SQLite, PostgreSQL, and MySQL through SQLx. That makes connection pooling and runtime shape an explicit architectural choice instead of something hidden behind a single adapter.
+
+| Dimension | ezorm | Prisma | Many TypeScript ORMs |
+| --- | --- | --- | --- |
+| Model definition | Decorated TypeScript classes in `@ezorm/core` | Schema file plus generated client | Varies between decorators, schema builders, and active-record style models |
+| Validation / metadata | Model definitions produce runtime metadata plus input validation from the same source | Type safety centers on the generated client and schema, not decorator metadata | Often split between ORM metadata and separate validation libraries |
+| Repository API shape | Small CRUD repositories plus explicit read queries, joins, includes, and relation loaders | Generated model delegates with broader query APIs | Often larger query-builder or repository surfaces |
+| Database support today | `@ezorm/orm` currently targets SQLite via `node:sqlite`; Rust relational components use SQLx-backed SQLite, PostgreSQL, and MySQL; MSSQL is not currently supported | Multi-database support is part of the main client/runtime story | Varies by adapter and dialect |
+| Connection pooling today | Rust relational components use pooled SQLx connections; the main TypeScript ORM path is not yet a pooled cross-database abstraction | Connection management is handled inside the Prisma runtime stack | Usually delegated to the driver, adapter, or ORM runtime |
+| Runtime / deployment shape | Can run directly in local Node SQLite flows or move relational work behind Rust-backed runtime and proxy helpers | Usually presented as one generated client talking to the database from server runtimes | Usually optimized for direct database access from the app runtime |
+| Schema workflow today | `pushSchema` and `pullSchema` exist in the ORM, and the CLI currently exposes the intended workflow surface while most commands still print queued/demo output | Migration and introspection workflows are core product features | Varies widely across tools |
+| Current scope | Focused on decorated models, repository CRUD, explicit read queries, relation loading, and runtime plumbing | Broader generated-client ORM platform | Usually broader dialect and workflow coverage, depending on the project |
+
+Current limits are important:
+
+- The main `@ezorm/orm` package is still SQLite-only today.
+- Rust relational pooling currently applies to the SQLx-backed event-store, snapshot, and projection components, not to the full TypeScript ORM API.
+- Query support is intentionally focused on repository CRUD plus explicit read queries and relation loading.
+- The CLI command surface is implemented, but most commands still print queued/demo output.
+
+If you want the current ezorm product path, start with the `@ezorm/core` and `@ezorm/orm` model and repository flow shown below, then add runtimes and adapters as needed.
+
 ## Start Here
 
 If you have never used this library before, use this order:
@@ -251,3 +275,7 @@ The maintained examples live here:
 ## Notes
 
 The maintained product path is `@ezorm/core` + `@ezorm/orm`. The examples, adapters, and CLI in this repository are intentionally centered on simple ORM-style CRUD workflows.
+
+## License
+
+Ezorm is available under the [MIT License](/Users/thachp/repos/sqlmodel-ts/LICENSE). Copyright (c) 2026 ezorm contributors.
