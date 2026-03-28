@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_ts_proxy"
+name = "sqlmodel_proxy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,5 +7,5 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-sqlmodel_ts_event_store = { path = "../event_store" }
+sqlmodel_event_store = { path = "../event_store" }
 

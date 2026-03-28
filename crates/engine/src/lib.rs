@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use sqlmodel_ts_event_store::{
+use sqlmodel_event_store::{
     EventReader, EventRecord, EventStoreError, InMemoryEventStore, NewEvent, SqlEventStore,
 };
-use sqlmodel_ts_snapshots::{InMemorySnapshotStore, SnapshotRecord, SnapshotStoreError, SqlSnapshotStore};
+use sqlmodel_snapshots::{InMemorySnapshotStore, SnapshotRecord, SnapshotStoreError, SqlSnapshotStore};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoadedStream {

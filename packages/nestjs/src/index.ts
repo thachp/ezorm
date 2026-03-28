@@ -1,5 +1,5 @@
-import type { EventStore } from "@sqlmodel-ts/events";
-import type { CommandBus, ProjectorRegistry, QueryBus } from "@sqlmodel-ts/cqrs";
+import type { EventStore } from "@sqlmodel/events";
+import type { CommandBus, ProjectorRegistry, QueryBus } from "@sqlmodel/cqrs";
 
 export interface SqlModelNestModuleOptions {
   eventStore: EventStore;

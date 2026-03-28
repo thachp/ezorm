@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlmodel_ts_event_store::{EventRecord, NewEvent};
+use sqlmodel_event_store::{EventRecord, NewEvent};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoadStreamRequest {

@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_ts_dialects"
+name = "sqlmodel_dialects"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

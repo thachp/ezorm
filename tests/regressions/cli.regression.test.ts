@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCliCommand, runCli } from "@sqlmodel-ts/cli";
+import { parseCliCommand, runCli } from "@sqlmodel/cli";
 
 describe("regression: cli-routing", () => {
   it("parses projector replay commands consistently", () => {

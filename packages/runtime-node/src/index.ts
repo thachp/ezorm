@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { InMemoryEventStore, type DomainEvent, type EventStore, type StoredEvent } from "@sqlmodel-ts/events";
+import { InMemoryEventStore, type DomainEvent, type EventStore, type StoredEvent } from "@sqlmodel/events";
 
 export interface NodeRuntimeBinding {
   bootstrap?(): Promise<void>;
@@ -160,9 +160,10 @@ export function loadNativeModule(modulePath?: string): NativeModule {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
     modulePath,
-    process.env.SQLMODEL_TS_NAPI_PATH,
-    resolve(here, "../../../target/debug/sqlmodel_ts_napi.node"),
-    resolve(here, "../../../target/release/sqlmodel_ts_napi.node")
+    process.env.SQLMODEL_NAPI_PATH,
+    resolve(here, "../native/sqlmodel_napi.node"),
+    resolve(here, "../../../target/debug/sqlmodel_napi.node"),
+    resolve(here, "../../../target/release/sqlmodel_napi.node")
   ].filter((value): value is string => Boolean(value));
 
   let lastError: unknown;
@@ -175,7 +176,7 @@ export function loadNativeModule(modulePath?: string): NativeModule {
   }
 
   throw new Error(
-    `Unable to load sqlmodel-ts native binding. Tried: ${candidates.join(", ") || "(none)"}. ${
+    `Unable to load sqlmodel native binding. Tried: ${candidates.join(", ") || "(none)"}. Run \`pnpm build:native\` or reinstall dependencies. ${
       lastError instanceof Error ? lastError.message : ""
     }`.trim()
   );

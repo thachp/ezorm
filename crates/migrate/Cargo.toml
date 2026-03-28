@@ -1,10 +1,10 @@
 [package]
-name = "sqlmodel_ts_migrate"
+name = "sqlmodel_migrate"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 serde.workspace = true
-sqlmodel_ts_dialects = { path = "../dialects" }
+sqlmodel_dialects = { path = "../dialects" }
 

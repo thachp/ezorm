@@ -1,7 +1,16 @@
 {
-  "name": "@sqlmodel-ts/runtime-node",
+  "name": "@sqlmodel/runtime-node",
   "version": "0.1.0",
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "native",
+    "scripts"
+  ],
+  "scripts": {
+    "build:native": "node ./scripts/build-native.mjs --release",
+    "build:native:debug": "node ./scripts/build-native.mjs",
+    "install": "node ./scripts/build-native.mjs"
+  }
 }
-

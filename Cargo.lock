@@ -1188,46 +1188,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlmodel_ts_dialects"
+name = "sqlmodel_dialects"
 version = "0.1.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
-name = "sqlmodel_ts_engine"
+name = "sqlmodel_engine"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "sqlmodel_ts_event_store",
- "sqlmodel_ts_snapshots",
+ "sqlmodel_event_store",
+ "sqlmodel_snapshots",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
-name = "sqlmodel_ts_event_store"
+name = "sqlmodel_event_store"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "sqlmodel_ts_dialects",
+ "sqlmodel_dialects",
  "sqlx",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
-name = "sqlmodel_ts_migrate"
+name = "sqlmodel_migrate"
 version = "0.1.0"
 dependencies = [
  "serde",
- "sqlmodel_ts_dialects",
+ "sqlmodel_dialects",
 ]
 
 [[package]]
-name = "sqlmodel_ts_napi"
+name = "sqlmodel_napi"
 version = "0.1.0"
 dependencies = [
  "napi",
@@ -1235,35 +1235,35 @@ dependencies = [
  "napi-derive",
  "serde",
  "serde_json",
- "sqlmodel_ts_event_store",
+ "sqlmodel_event_store",
  "tokio",
 ]
 
 [[package]]
-name = "sqlmodel_ts_projections"
+name = "sqlmodel_projections"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "sqlmodel_ts_event_store",
+ "sqlmodel_event_store",
 ]
 
 [[package]]
-name = "sqlmodel_ts_proxy"
+name = "sqlmodel_proxy"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "sqlmodel_ts_event_store",
+ "sqlmodel_event_store",
 ]
 
 [[package]]
-name = "sqlmodel_ts_snapshots"
+name = "sqlmodel_snapshots"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "sqlmodel_ts_dialects",
+ "sqlmodel_dialects",
  "sqlx",
  "thiserror",
  "tokio",

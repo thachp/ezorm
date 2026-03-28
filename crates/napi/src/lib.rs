@@ -2,7 +2,7 @@ use napi::bindgen_prelude::Result as NapiResult;
 use napi::Error;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-use sqlmodel_ts_event_store::{EventRecord, NewEvent, SqlEventStore};
+use sqlmodel_event_store::{EventRecord, NewEvent, SqlEventStore};
 use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,8 +16,8 @@ impl NodeBindingManifest {
     #[must_use]
     pub fn new(target_triple: impl Into<String>) -> Self {
         Self {
-            package_name: "@sqlmodel-ts/runtime-node".into(),
-            binary_name: "sqlmodel_ts_napi".into(),
+            package_name: "@sqlmodel/runtime-node".into(),
+            binary_name: "sqlmodel_napi".into(),
             target_triple: target_triple.into(),
         }
     }
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn builds_binding_manifest() {
         let manifest = NodeBindingManifest::new("aarch64-apple-darwin");
-        assert_eq!(manifest.package_name, "@sqlmodel-ts/runtime-node");
+        assert_eq!(manifest.package_name, "@sqlmodel/runtime-node");
     }
 
     #[test]

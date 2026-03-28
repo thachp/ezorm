@@ -13,7 +13,7 @@ import {
   validateModelInput
 } from "./index";
 
-describe("@sqlmodel-ts/core", () => {
+describe("@sqlmodel/core", () => {
   beforeEach(() => {
     clearMetadataRegistry();
   });

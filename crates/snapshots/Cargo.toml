@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_ts_snapshots"
+name = "sqlmodel_snapshots"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
-sqlmodel_ts_dialects = { path = "../dialects" }
+sqlmodel_dialects = { path = "../dialects" }
 
 [dev-dependencies]
 tokio.workspace = true

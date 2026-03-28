@@ -1,5 +1,5 @@
 {
-  "name": "@sqlmodel-ts/next",
+  "name": "@sqlmodel/next",
   "version": "0.1.0",
   "type": "module",
   "exports": {

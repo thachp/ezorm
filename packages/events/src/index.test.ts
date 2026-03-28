@@ -23,7 +23,7 @@ class AccountAggregate extends EventSourcedAggregate<DomainEvent<{ amount: numbe
   }
 }
 
-describe("@sqlmodel-ts/events", () => {
+describe("@sqlmodel/events", () => {
   it("appends events with strict version checks", async () => {
     const store = new InMemoryEventStore();
     await store.append("account-1", 0, [{ type: "account.opened", payload: {}, schemaVersion: 1 }]);

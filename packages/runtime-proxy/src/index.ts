@@ -1,4 +1,4 @@
-import type { DomainEvent, EventStore, StoredEvent } from "@sqlmodel-ts/events";
+import type { DomainEvent, EventStore, StoredEvent } from "@sqlmodel/events";
 
 export interface ProxyRuntimeClientOptions {
   endpoint: string;

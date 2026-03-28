@@ -1,4 +1,4 @@
-import type { DomainEvent, EventStore, Snapshot, StoredEvent, VersionedWrite } from "@sqlmodel-ts/events";
+import type { DomainEvent, EventStore, Snapshot, StoredEvent, VersionedWrite } from "@sqlmodel/events";
 
 export interface CommandDefinition<TPayload extends VersionedWrite, TResult> {
   name: string;

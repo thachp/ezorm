@@ -1,4 +1,4 @@
-import { ProxyRuntimeClient } from "@sqlmodel-ts/runtime-proxy";
+import { ProxyRuntimeClient } from "@sqlmodel/runtime-proxy";
 import { NEXT_EDGE_RUNTIME, assertEdgeSafeImport } from "./index";
 
 export function createNextEdgeRuntime(endpoint: string) {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use sqlmodel_ts_event_store::{EventReader, EventRecord};
+use sqlmodel_event_store::{EventReader, EventRecord};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectionCheckpoint {
@@ -70,7 +70,7 @@ pub fn replay_projection<R: EventReader, P: Projector>(
 mod tests {
     use super::*;
     use serde_json::json;
-    use sqlmodel_ts_event_store::{InMemoryEventStore, NewEvent};
+    use sqlmodel_event_store::{InMemoryEventStore, NewEvent};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     struct CountingProjector<'a> {

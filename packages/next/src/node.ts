@@ -1,4 +1,4 @@
-import { createNodeRuntime, type NodeRuntimeBinding } from "@sqlmodel-ts/runtime-node";
+import { createNodeRuntime, type NodeRuntimeBinding } from "@sqlmodel/runtime-node";
 import { NEXT_NODE_RUNTIME } from "./index";
 
 export async function createNextNodeRuntime(

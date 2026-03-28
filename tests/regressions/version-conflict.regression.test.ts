@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryEventStore, VersionConflictError } from "@sqlmodel-ts/events";
+import { InMemoryEventStore, VersionConflictError } from "@sqlmodel/events";
 
 describe("regression: version-conflict", () => {
   it("rejects stale version writes and prevents duplicate append under retry", async () => {

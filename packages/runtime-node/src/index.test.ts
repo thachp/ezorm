@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createNativeBindingFactory, createNodeRuntime } from "./index";
 
-describe("@sqlmodel-ts/runtime-node", () => {
+describe("@sqlmodel/runtime-node", () => {
   it("uses a binding factory when a database url is supplied", async () => {
     const bootstrap = vi.fn();
     const runtime = await createNodeRuntime(undefined, {
@@ -25,26 +25,27 @@ describe("@sqlmodel-ts/runtime-node", () => {
   it("maps native event payloads into the public stored-event shape", async () => {
     const factory = createNativeBindingFactory(() => ({
       connectNativeRuntime() {
+        const nativeEvents = [
+          {
+            streamId: "account-1",
+            version: 1,
+            sequence: 1,
+            eventType: "account.opened",
+            payloadJson: JSON.stringify({ owner: "alice" }),
+            schemaVersion: 1,
+            metadataJson: JSON.stringify({ source: "native" })
+          }
+        ];
         return {
           bootstrap() {},
           load() {
-            return [
-              {
-                streamId: "account-1",
-                version: 1,
-                sequence: 1,
-                eventType: "account.opened",
-                payloadJson: JSON.stringify({ owner: "alice" }),
-                schemaVersion: 1,
-                metadataJson: JSON.stringify({ source: "native" })
-              }
-            ];
+            return nativeEvents;
           },
           loadAll() {
-            return this.load();
+            return nativeEvents;
           },
           append() {
-            return this.load();
+            return nativeEvents;
           },
           latestVersion() {
             return 1;

@@ -1,4 +1,4 @@
-# sqlmodel-ts Agent Guide
+# sqlmodel Agent Guide
 
 ## Workspace Overview
 
