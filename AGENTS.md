@@ -85,6 +85,7 @@ Current example workflows:
 - The CLI migration workflow requires a single `ezorm.config.ts`, `ezorm.config.mts`, `ezorm.config.cts`, `ezorm.config.mjs`, `ezorm.config.js`, or `ezorm.config.cjs` file exporting `databaseUrl`, optional `models`, optional `modelPaths`, and optional `migrationsDir`.
 - `ezorm init` scaffolds the config in the nearest package root, adds an example Todo model only when no existing `@Model` source is present, and patches `tsconfig.json` to enable `experimentalDecorators` plus `emitDecoratorMetadata` for TypeScript scaffolds.
 - When `models` is omitted from the config, the CLI scans `modelPaths` for files containing `@Model` or `Model(...)` and derives migration metadata from the discovered model modules.
+- Schema-producing CLI workflows (`migrate generate`, `migrate status`, and `db push`) should fail fast when loaded model metadata is incomplete, including zero-field models or models without exactly one primary key field.
 
 ## Guardrails
 

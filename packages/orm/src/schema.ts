@@ -36,6 +36,7 @@ export function deriveModelSchemas(
 
   for (const model of models) {
     const metadata = typeof model === "function" ? getModelMetadata(model) : model;
+    validateModelSchemaMetadata(metadata);
     mergeTableSchema(tables, {
       name: metadata.table,
       columns: metadata.fields.map((field) => ({
@@ -237,6 +238,26 @@ function mergeTableSchema(target: Map<string, TableSchema>, incoming: TableSchem
       throw new Error(`Conflicting index definitions for table ${incoming.name}.${index.name}`);
     }
   }
+}
+
+function validateModelSchemaMetadata(metadata: ModelMetadata): void {
+  if (metadata.fields.length === 0) {
+    throw invalidModelSchemaError(metadata, "must declare at least one field");
+  }
+
+  const primaryKeys = metadata.fields.filter((field) => field.primaryKey);
+  if (primaryKeys.length !== 1) {
+    throw invalidModelSchemaError(
+      metadata,
+      `must declare exactly one primary key field, found ${primaryKeys.length}`
+    );
+  }
+}
+
+function invalidModelSchemaError(metadata: ModelMetadata, detail: string): Error {
+  return new Error(
+    `Model ${metadata.name} for table ${metadata.table} ${detail}. This usually means decorators did not execute, the model was not loaded through a supported TypeScript/JavaScript entrypoint, or TypeScript decorator settings are missing.`
+  );
 }
 
 function normalizeTableSchema(table: TableSchema): TableSchema {

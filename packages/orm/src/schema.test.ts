@@ -67,6 +67,27 @@ describe("schema helpers", () => {
     expect(addColumnPlan.blockedChanges).toEqual([]);
   });
 
+  it("fails fast when a model has no fields", () => {
+    @Model({ table: "todos" })
+    class Todo {}
+
+    expect(() => deriveModelSchemas("sqlite", [Todo])).toThrow(
+      "Model Todo for table todos must declare at least one field"
+    );
+  });
+
+  it("fails fast when a model does not declare exactly one primary key field", () => {
+    @Model({ table: "todos" })
+    class Todo {
+      @Field.string()
+      title!: string;
+    }
+
+    expect(() => deriveModelSchemas("sqlite", [Todo])).toThrow(
+      "Model Todo for table todos must declare exactly one primary key field, found 0"
+    );
+  });
+
   it("blocks destructive drift on managed tables", () => {
     @Model({ table: "todos" })
     class Todo {

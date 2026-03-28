@@ -165,6 +165,29 @@ describe("ezorm CLI", () => {
     15_000
   );
 
+  it(
+    "generates full column definitions for decorator-authored TypeScript models via the published bin path",
+    async () => {
+      await ensureCliBuild();
+      const directory = await createTypeScriptCliWorkspace();
+
+      const generateResult = runCliBinary(["migrate", "generate", "init"], directory);
+      expect(generateResult.status).toBe(0);
+      expect(generateResult.stdout).toContain("Created migration");
+
+      const migrationFiles = await readdir(join(directory, "migrations"));
+      expect(migrationFiles).toHaveLength(1);
+      const migrationContent = await readFile(join(directory, "migrations", migrationFiles[0]), "utf8");
+      expect(migrationContent).toContain(
+        'CREATE TABLE IF NOT EXISTS "todos" ("id" TEXT PRIMARY KEY NOT NULL, "title" TEXT NOT NULL, "completed" INTEGER DEFAULT 0)'
+      );
+      expect(migrationContent).toContain(
+        'CREATE INDEX IF NOT EXISTS "todos_title_idx" ON "todos" ("title")'
+      );
+    },
+    15_000
+  );
+
   it("fails clearly when multiple config files are present", async () => {
     const directory = await createCliWorkspace();
     const io = createIo();
@@ -349,6 +372,65 @@ describe("ezorm CLI", () => {
     expect(io.logs.join("\n")).toContain('CREATE INDEX IF NOT EXISTS "todos_title_idx"');
   });
 
+  it("discovers TypeScript models for migrate generate when config.models is omitted", async () => {
+    const directory = await createWorkspaceRoot({
+      packageJson: { name: "scan-ts-generate", private: true },
+      tsconfig: {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          experimentalDecorators: true,
+          emitDecoratorMetadata: true
+        }
+      },
+      createSrcDirectory: true
+    });
+    const io = createIo();
+
+    await writeFile(
+      join(directory, "src/models.ts"),
+      [
+        'import { Field, Index, Model, PrimaryKey } from "@ezorm/core";',
+        "",
+        '@Model({ table: "todos" })',
+        '@Index(["title"], { name: "todos_title_idx" })',
+        "export class Todo {",
+        "  @PrimaryKey()",
+        "  @Field.string()",
+        "  id!: string;",
+        "",
+        "  @Field.string()",
+        "  title!: string;",
+        "",
+        "  @Field.boolean({ defaultValue: false })",
+        "  completed!: boolean;",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(directory, "ezorm.config.ts"),
+      [
+        "export default {",
+        `  databaseUrl: ${JSON.stringify(`sqlite://${join(directory, "app.sqlite")}`)},`,
+        '  modelPaths: ["src"]',
+        "};"
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(await main(["migrate", "generate", "init"], io, { cwd: directory })).toBe(0);
+    const migrationFiles = await readdir(join(directory, "migrations"));
+    expect(migrationFiles).toHaveLength(1);
+    const migrationContent = await readFile(join(directory, "migrations", migrationFiles[0]), "utf8");
+    expect(migrationContent).toContain(
+      'CREATE TABLE IF NOT EXISTS "todos" ("id" TEXT PRIMARY KEY NOT NULL, "title" TEXT NOT NULL, "completed" INTEGER DEFAULT 0)'
+    );
+    expect(migrationContent).toContain(
+      'CREATE INDEX IF NOT EXISTS "todos_title_idx" ON "todos" ("title")'
+    );
+  });
+
   it("discovers JavaScript models when config.models is omitted", async () => {
     const directory = await createWorkspaceRoot({
       packageJson: { name: "scan-js", private: true }
@@ -465,6 +547,23 @@ describe("ezorm CLI", () => {
     expect(await main(["db", "push"], io, { cwd: directory })).toBe(1);
     expect(io.errors.join("\n")).toContain("discoverable model files");
   });
+
+  it("fails fast for incomplete model metadata across schema-producing commands", async () => {
+    const directory = await createInvalidCliWorkspace();
+    const io = createIo();
+
+    expect(await main(["migrate", "generate", "init"], io, { cwd: directory })).toBe(1);
+    expect(io.errors.join("\n")).toContain("Model BrokenTodo for table todos must declare at least one field");
+    await expect(readdir(join(directory, "migrations"))).rejects.toThrow();
+
+    io.errors.length = 0;
+    expect(await main(["db", "push"], io, { cwd: directory })).toBe(1);
+    expect(io.errors.join("\n")).toContain("Model BrokenTodo for table todos must declare at least one field");
+
+    io.errors.length = 0;
+    expect(await main(["migrate", "status"], io, { cwd: directory })).toBe(1);
+    expect(io.errors.join("\n")).toContain("Model BrokenTodo for table todos must declare at least one field");
+  });
 });
 
 async function createCliWorkspace(): Promise<string> {
@@ -527,7 +626,8 @@ async function createTypeScriptCliWorkspace(): Promise<string> {
         compilerOptions: {
           target: "ES2022",
           module: "ESNext",
-          experimentalDecorators: true
+          experimentalDecorators: true,
+          emitDecoratorMetadata: true
         }
       },
       null,
@@ -549,6 +649,9 @@ async function createTypeScriptCliWorkspace(): Promise<string> {
       "",
       "  @Field.string()",
       "  title!: string;",
+      "",
+      "  @Field.boolean({ defaultValue: false })",
+      "  completed!: boolean;",
       "}"
     ].join("\n"),
     "utf8"
@@ -563,6 +666,27 @@ async function createTypeScriptCliWorkspace(): Promise<string> {
       "  models: [Todo]",
       "};"
     ].join("\n"),
+    "utf8"
+  );
+
+  return directory;
+}
+
+async function createInvalidCliWorkspace(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "ezorm-cli-invalid-"));
+  tempDirectories.push(directory);
+
+  class BrokenTodo {}
+  Model({ table: "todos" })(BrokenTodo);
+
+  const databasePath = join(directory, "app.sqlite");
+  (globalThis as { __EZORM_TEST_CONFIG__?: unknown }).__EZORM_TEST_CONFIG__ = {
+    databaseUrl: `sqlite://${databasePath}`,
+    models: [BrokenTodo]
+  };
+  await writeFile(
+    join(directory, "ezorm.config.mjs"),
+    "export default globalThis.__EZORM_TEST_CONFIG__;\n",
     "utf8"
   );
 

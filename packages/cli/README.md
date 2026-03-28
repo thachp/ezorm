@@ -55,6 +55,8 @@ When `models` is omitted, the CLI scans `modelPaths` for files containing `@Mode
 
 TypeScript scaffolds write `ezorm.config.ts`, ensure `experimentalDecorators` and `emitDecoratorMetadata` are enabled in `tsconfig.json`, and create an example `Todo` model when the project does not already contain one.
 
+Schema-producing commands fail fast when a loaded model resolves to incomplete metadata, such as no fields or no single-column primary key. If `migrate generate`, `migrate status`, or `db push` report invalid model metadata, check that your decorators executed, the model is loaded through a supported TypeScript or JavaScript entrypoint, and TypeScript decorator settings are enabled.
+
 JavaScript scaffolds write `ezorm.config.mjs` for ESM packages and `ezorm.config.cjs` otherwise. The generated JavaScript Todo example uses direct decorator function calls so it can run without TypeScript syntax.
 
 `migrations/` is the default migration directory. Set `migrationsDir` in the config to override it.
