@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createNativeBindingFactory, createNodeRuntime } from "./index";
+import { createNativeBindingFactory, createNodeRuntime, detectNativeTargetTriple } from "./index";
 
 describe("@sqlmodel/runtime-node", () => {
   it("uses a binding factory when a database url is supplied", async () => {
@@ -62,5 +62,16 @@ describe("@sqlmodel/runtime-node", () => {
       payload: { owner: "alice" },
       metadata: { source: "native" }
     });
+  });
+
+  it("maps supported platforms to packaged target triples", () => {
+    expect(detectNativeTargetTriple("darwin", "arm64")).toBe("aarch64-apple-darwin");
+    expect(detectNativeTargetTriple("linux", "x64")).toBe("x86_64-unknown-linux-gnu");
+  });
+
+  it("fails fast on unsupported packaged targets", () => {
+    expect(() => detectNativeTargetTriple("freebsd", "x64")).toThrow(
+      "Unsupported native target for sqlmodel: freebsd/x64"
+    );
   });
 });

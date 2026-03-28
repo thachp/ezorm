@@ -1,3 +1,6 @@
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 export type CliCommand =
   | ["migrate", "generate", string?]
   | ["migrate", "apply"]
@@ -5,6 +8,16 @@ export type CliCommand =
   | ["projector", "replay", string?]
   | ["projector", "reset", string?]
   | ["db", "pull"];
+
+const HELP_TEXT = [
+  "Usage:",
+  "  sqlmod migrate generate [name]",
+  "  sqlmod migrate apply",
+  "  sqlmod migrate status",
+  "  sqlmod projector replay [name]",
+  "  sqlmod projector reset [name]",
+  "  sqlmod db pull"
+].join("\n");
 
 export function parseCliCommand(argv: string[]): CliCommand {
   const [scope, action, argument] = argv;
@@ -36,6 +49,38 @@ export function runCli(argv: string[]): string {
   return `Queued ${command.join(" ")}`.trim();
 }
 
-if (process.argv[1]?.endsWith("index.ts")) {
-  console.log(runCli(process.argv.slice(2)));
+export function formatCliHelp(): string {
+  return HELP_TEXT;
+}
+
+export function main(
+  argv: string[] = process.argv.slice(2),
+  io: Pick<Console, "log" | "error"> = console
+): number {
+  if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
+    io.log(formatCliHelp());
+    return 0;
+  }
+
+  try {
+    io.log(runCli(argv));
+    return 0;
+  } catch (error) {
+    io.error(error instanceof Error ? error.message : String(error));
+    io.error("");
+    io.error(formatCliHelp());
+    return 1;
+  }
+}
+
+function isDirectExecution(executedPath?: string): boolean {
+  if (!executedPath) {
+    return false;
+  }
+
+  return resolve(executedPath) === fileURLToPath(import.meta.url);
+}
+
+if (isDirectExecution(process.argv[1])) {
+  process.exitCode = main();
 }

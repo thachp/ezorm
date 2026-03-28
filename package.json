@@ -7,7 +7,11 @@
     "build": "pnpm build:ts && pnpm build:native",
     "build:native": "node packages/runtime-node/scripts/build-native.mjs --release",
     "build:native:debug": "node packages/runtime-node/scripts/build-native.mjs",
+    "build:sqlmod": "pnpm --dir packages/cli run build",
     "build:ts": "tsc -p tsconfig.json",
+    "pack:sqlmod": "node ./scripts/pack-sqlmod.mjs",
+    "release:sqlmod": "node ./scripts/release-sqlmod.mjs",
+    "smoke:sqlmod": "node ./scripts/smoke-sqlmod-package.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:ts": "vitest run",
     "test": "pnpm test:ts && cargo test"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCliCommand, runCli } from "@sqlmodel/cli";
+import { formatCliHelp, parseCliCommand, runCli } from "sqlmod";
 
 describe("regression: cli-routing", () => {
   it("parses projector replay commands consistently", () => {
@@ -9,5 +9,9 @@ describe("regression: cli-routing", () => {
       "balances"
     ]);
     expect(runCli(["migrate", "status"])).toBe("Queued migrate status");
+  });
+
+  it("documents the sqlmod command surface", () => {
+    expect(formatCliHelp()).toContain("sqlmod migrate status");
   });
 });

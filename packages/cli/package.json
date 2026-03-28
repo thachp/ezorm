@@ -1,9 +1,32 @@
 {
-  "name": "@sqlmodel/cli",
+  "name": "sqlmod",
   "version": "0.1.0",
+  "description": "SQLModel CLI for migrations, projectors, and database workflows.",
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "orm": "./src/index.ts"
+    "sqlmod": "./bin/sqlmod.js"
   },
-  "exports": "./src/index.ts"
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "prepack": "pnpm run build"
+  }
 }

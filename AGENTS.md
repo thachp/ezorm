@@ -19,22 +19,26 @@
 Root scripts:
 
 - `pnpm build:ts`
+- `pnpm build:sqlmod`
 - `pnpm typecheck`
+- `pnpm pack:sqlmod`
+- `pnpm smoke:sqlmod`
+- `pnpm release:sqlmod`
 - `pnpm test:ts`
 - `pnpm test`
 - `cargo test`
 
 Current CLI command workflows:
 
-- `orm migrate generate [name]`
-- `orm migrate apply`
-- `orm projector replay [name]`
-- `orm projector reset [name]`
+- `sqlmod migrate generate [name]`
+- `sqlmod migrate apply`
+- `sqlmod projector replay [name]`
+- `sqlmod projector reset [name]`
 
 Current CLI query workflows:
 
-- `orm migrate status`
-- `orm db pull`
+- `sqlmod migrate status`
+- `sqlmod db pull`
 
 ## CQRS Rules
 
@@ -51,7 +55,7 @@ Current CLI query workflows:
 - Do not document commands or queries that are not implemented in code.
 - Keep command and query classifications one-way in docs and code. If a command starts returning read-model behavior, split that behavior into a separate query.
 - Use `packages/cli/src/index.ts` as the source of truth for the current CLI workflow surface.
-- Use `package.json` and `Cargo.toml` as the source of truth for root validation commands.
+- Use `package.json`, `packages/cli/package.json`, and `Cargo.toml` as the source of truth for root validation commands and npm packaging workflows.
 
 ## Commit Guidelines
 

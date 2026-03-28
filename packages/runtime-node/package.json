@@ -1,16 +1,36 @@
 {
   "name": "@sqlmodel/runtime-node",
   "version": "0.1.0",
+  "description": "Native Node.js runtime bindings for SQLModel.",
+  "license": "MIT",
   "type": "module",
-  "exports": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "files": [
-    "src",
+    "dist",
     "native",
-    "scripts"
+    "scripts/build-package.mjs",
+    "scripts/build-native.mjs",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
+    "build": "node ./scripts/build-package.mjs",
     "build:native": "node ./scripts/build-native.mjs --release",
     "build:native:debug": "node ./scripts/build-native.mjs",
-    "install": "node ./scripts/build-native.mjs"
+    "prepack": "pnpm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@sqlmodel/events": "0.1.0"
   }
 }

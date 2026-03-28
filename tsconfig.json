@@ -24,7 +24,7 @@
       "@sqlmodel/next/node": ["packages/next/src/node.ts"],
       "@sqlmodel/next/edge": ["packages/next/src/edge.ts"],
       "@sqlmodel/nestjs": ["packages/nestjs/src/index.ts"],
-      "@sqlmodel/cli": ["packages/cli/src/index.ts"]
+      "sqlmod": ["packages/cli/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
