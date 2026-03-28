@@ -1,12 +1,12 @@
 {
-  "name": "@sqlmodel/proxy-bin-x86_64-apple-darwin",
+  "name": "@ezorm/proxy-bin-x86_64-apple-darwin",
   "version": "0.1.0",
-  "description": "Prebuilt sqlmodel_proxy binary for x86_64-apple-darwin.",
+  "description": "Prebuilt ezorm_proxy binary for x86_64-apple-darwin.",
   "license": "MIT",
   "os": ["darwin"],
   "cpu": ["x64"],
   "bin": {
-    "sqlmodel_proxy": "./bin/sqlmodel_proxy"
+    "ezorm_proxy": "./bin/ezorm_proxy"
   },
   "files": [
     "bin",

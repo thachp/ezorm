@@ -4,7 +4,7 @@ import {
   validateModelInput,
   type FieldMetadata,
   type ModelMetadata
-} from "@sqlmodel/core";
+} from "@ezorm/core";
 
 type SqlScalar = string | number | boolean | null;
 type DatabaseValue = string | number | null;
@@ -228,7 +228,7 @@ function resolveSqliteFilename(databaseUrl: string): string {
     const path = databaseUrl.slice("sqlite://".length);
     return path.startsWith("/") ? path : `/${path}`;
   }
-  throw new Error(`Unsupported database url for @sqlmodel/orm: ${databaseUrl}`);
+  throw new Error(`Unsupported database url for @ezorm/orm: ${databaseUrl}`);
 }
 
 function createTableStatement(metadata: ModelMetadata): string {

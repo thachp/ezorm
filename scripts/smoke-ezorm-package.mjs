@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageDir = resolve(rootDir, "packages/cli");
-const workspace = mkdtempSync(resolve(tmpdir(), "sqlmod-smoke-"));
+const workspace = mkdtempSync(resolve(tmpdir(), "ezorm-smoke-"));
 
 const packResult = spawnSync(
   "npm",
@@ -28,20 +28,20 @@ const tarballPath = resolve(workspace, filename);
 run("npm", ["init", "-y"]);
 run("npm", ["install", tarballPath]);
 assertOutput(
-  run("npx", ["sqlmod", "migrate", "status"]).stdout,
+  run("npx", ["ezorm", "migrate", "status"]).stdout,
   "Queued migrate status",
   "npm install smoke test"
 );
 
 run("pnpm", ["add", tarballPath]);
 assertOutput(
-  run("pnpm", ["exec", "sqlmod", "migrate", "status"]).stdout,
+  run("pnpm", ["exec", "ezorm", "migrate", "status"]).stdout,
   "Queued migrate status",
   "pnpm add smoke test"
 );
 
 assertOutput(
-  run("npx", ["--yes", "--package", tarballPath, "sqlmod", "migrate", "status"]).stdout,
+  run("npx", ["--yes", "--package", tarballPath, "ezorm", "migrate", "status"]).stdout,
   "Queued migrate status",
   "npx package smoke test"
 );

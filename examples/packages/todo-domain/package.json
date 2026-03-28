@@ -1,5 +1,5 @@
 {
-  "name": "@sqlmodel/example-todo-domain",
+  "name": "@ezorm/example-todo-domain",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sqlmodel/core": "workspace:*",
-    "@sqlmodel/orm": "workspace:*"
+    "@ezorm/core": "workspace:*",
+    "@ezorm/orm": "workspace:*"
   }
 }

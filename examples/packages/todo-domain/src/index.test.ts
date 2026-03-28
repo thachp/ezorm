@@ -4,7 +4,7 @@ import {
   createTodoDemoServices
 } from "./index";
 
-describe("@sqlmodel/example-todo-domain", () => {
+describe("@ezorm/example-todo-domain", () => {
   it("exposes a plain todo model for ORM usage", () => {
     expect(TodoModel.name).toBe("TodoModel");
   });

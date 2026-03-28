@@ -10,11 +10,11 @@ export type CliCommand =
 
 const HELP_TEXT = [
   "Usage:",
-  "  sqlmod migrate generate [name]",
-  "  sqlmod migrate apply",
-  "  sqlmod migrate status",
-  "  sqlmod db pull",
-  "  sqlmod db push"
+  "  ezorm migrate generate [name]",
+  "  ezorm migrate apply",
+  "  ezorm migrate status",
+  "  ezorm db pull",
+  "  ezorm db push"
 ].join("\n");
 
 export function parseCliCommand(argv: string[]): CliCommand {

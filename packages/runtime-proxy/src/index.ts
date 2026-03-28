@@ -1,11 +1,11 @@
-import { getModelMetadata } from "@sqlmodel/core";
+import { getModelMetadata } from "@ezorm/core";
 import type {
   FindManyOptions,
   ModelClass,
   OrmClient,
   Repository,
   TableSchema
-} from "@sqlmodel/orm";
+} from "@ezorm/orm";
 
 export interface ProxyOrmClientOptions {
   endpoint: string;

@@ -12,7 +12,7 @@ import {
   validateModelInput
 } from "./index";
 
-describe("@sqlmodel/core", () => {
+describe("@ezorm/core", () => {
   beforeEach(() => {
     clearMetadataRegistry();
   });

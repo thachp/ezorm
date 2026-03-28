@@ -3,7 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import {
   createTodoDemoServices,
   type TodoDemoServices
-} from "@sqlmodel/example-todo-domain";
+} from "@ezorm/example-todo-domain";
 import { TodoApiModule } from "./todo-api.module";
 
 export async function createTodoApiApplication(services?: TodoDemoServices) {

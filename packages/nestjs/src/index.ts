@@ -1,11 +1,11 @@
-import type { ModelClass, OrmClient, Repository } from "@sqlmodel/orm";
+import type { ModelClass, OrmClient, Repository } from "@ezorm/orm";
 
-export interface SqlModelNestModuleOptions {
+export interface EzormNestModuleOptions {
   client: OrmClient;
-  repositories?: SqlModelRepositoryProvider[];
+  repositories?: EzormRepositoryProvider[];
 }
 
-export interface SqlModelRepositoryProvider<T extends object = Record<string, unknown>> {
+export interface EzormRepositoryProvider<T extends object = Record<string, unknown>> {
   provide: string;
   model: ModelClass<T>;
 }
@@ -17,26 +17,26 @@ export interface NestProviderDescriptor<T = unknown> {
   inject?: string[];
 }
 
-export function createSqlModelProviders(
-  options: SqlModelNestModuleOptions
+export function createEzormProviders(
+  options: EzormNestModuleOptions
 ): NestProviderDescriptor[] {
   return [
-    { provide: "SQLMODEL_ORM_CLIENT", useValue: options.client },
+    { provide: "EZORM_ORM_CLIENT", useValue: options.client },
     ...(options.repositories ?? []).map((repository) => ({
       provide: repository.provide,
       useFactory: (client: OrmClient): Repository<Record<string, unknown>> =>
         client.repository(repository.model),
-      inject: ["SQLMODEL_ORM_CLIENT"]
+      inject: ["EZORM_ORM_CLIENT"]
     }))
   ];
 }
 
-export class SqlModelModule {
-  static forRoot(options: SqlModelNestModuleOptions) {
+export class EzormModule {
+  static forRoot(options: EzormNestModuleOptions) {
     return {
-      module: SqlModelModule,
-      providers: createSqlModelProviders(options),
-      exports: createSqlModelProviders(options)
+      module: EzormModule,
+      providers: createEzormProviders(options),
+      exports: createEzormProviders(options)
     };
   }
 }

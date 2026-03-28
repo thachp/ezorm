@@ -14,7 +14,7 @@ vi.mock("node:child_process", async () => {
   };
 });
 
-import { ensureSqlModelProxy, resolvePackagedProxyBinary } from "./index";
+import { ensureEzormProxy, resolvePackagedProxyBinary } from "./index";
 
 class FakeChildProcess extends EventEmitter {
   readonly stdout = new EventEmitter();
@@ -33,7 +33,7 @@ class FakeChildProcess extends EventEmitter {
   });
 }
 
-describe("@sqlmodel/proxy-node", () => {
+describe("@ezorm/proxy-node", () => {
   beforeEach(() => {
     spawnMock.mockReset();
   });
@@ -44,9 +44,9 @@ describe("@sqlmodel/proxy-node", () => {
 
   it("fails fast when databaseUrl is empty", async () => {
     await expect(
-      ensureSqlModelProxy({
+      ensureEzormProxy({
         databaseUrl: "   ",
-        binaryPath: "/tmp/sqlmodel_proxy"
+        binaryPath: "/tmp/ezorm_proxy"
       })
     ).rejects.toThrow("databaseUrl is required");
   });
@@ -61,15 +61,15 @@ describe("@sqlmodel/proxy-node", () => {
       })
     );
 
-    const first = await ensureSqlModelProxy({
+    const first = await ensureEzormProxy({
       databaseUrl: "sqlite://managed-proxy-reuse.db",
       port: 4510,
-      binaryPath: "/tmp/sqlmodel_proxy"
+      binaryPath: "/tmp/ezorm_proxy"
     });
-    const second = await ensureSqlModelProxy({
+    const second = await ensureEzormProxy({
       databaseUrl: "sqlite://managed-proxy-reuse.db",
       port: 4510,
-      binaryPath: "/tmp/sqlmodel_proxy"
+      binaryPath: "/tmp/ezorm_proxy"
     });
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
@@ -90,11 +90,11 @@ describe("@sqlmodel/proxy-node", () => {
       })
     );
 
-    const handle = await ensureSqlModelProxy({
+    const handle = await ensureEzormProxy({
       databaseUrl: "sqlite://managed-proxy-explicit.db",
       host: "0.0.0.0",
       port: 4610,
-      binaryPath: "/tmp/sqlmodel_proxy"
+      binaryPath: "/tmp/ezorm_proxy"
     });
 
     const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { env: Record<string, string> }];
@@ -115,13 +115,13 @@ describe("@sqlmodel/proxy-node", () => {
     );
 
     await expect(
-      ensureSqlModelProxy({
+      ensureEzormProxy({
         databaseUrl: "sqlite://managed-proxy-timeout.db",
         port: 4710,
         startupTimeoutMs: 50,
-        binaryPath: "/tmp/sqlmodel_proxy"
+        binaryPath: "/tmp/ezorm_proxy"
       })
-    ).rejects.toThrow("Timed out waiting for sqlmodel proxy healthcheck");
+    ).rejects.toThrow("Timed out waiting for ezorm proxy healthcheck");
 
     expect(child.kill).toHaveBeenCalled();
   });
@@ -131,17 +131,17 @@ describe("@sqlmodel/proxy-node", () => {
       resolvePackagedProxyBinary(undefined, "freebsd", "x64", {
         resolve: () => ""
       } as unknown as NodeRequire)
-    ).toThrow("Install a compatible prebuilt @sqlmodel/proxy-bin-* package or pass binaryPath.");
+    ).toThrow("Install a compatible prebuilt @ezorm/proxy-bin-* package or pass binaryPath.");
   });
 
   it("resolves a packaged binary through optional dependency metadata", () => {
-    const packageRoot = mkdtempSync(resolve(tmpdir(), "sqlmodel-proxy-bin-"));
+    const packageRoot = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-bin-"));
     const packageJsonPath = resolve(packageRoot, "package.json");
     const binaryDir = resolve(packageRoot, "bin");
-    const binaryPath = resolve(binaryDir, "sqlmodel_proxy");
+    const binaryPath = resolve(binaryDir, "ezorm_proxy");
 
     mkdirSync(binaryDir, { recursive: true });
-    writeFileSync(packageJsonPath, JSON.stringify({ name: "@sqlmodel/proxy-bin-aarch64-apple-darwin" }));
+    writeFileSync(packageJsonPath, JSON.stringify({ name: "@ezorm/proxy-bin-aarch64-apple-darwin" }));
     writeFileSync(binaryPath, "binary");
 
     expect(

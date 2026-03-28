@@ -1,11 +1,11 @@
 {
-  "name": "sqlmod",
+  "name": "ezorm",
   "version": "0.1.0",
-  "description": "SQLModel CLI for migrations and database workflows.",
+  "description": "Ezorm CLI for migrations and database workflows.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "sqlmod": "./bin/sqlmod.js"
+    "ezorm": "./bin/ezorm.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

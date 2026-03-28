@@ -8,12 +8,12 @@ export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const proxyNodePackageDir = resolve(rootDir, "packages/proxy-node");
 
 const BINARY_PACKAGE_BY_TARGET = {
-  "aarch64-apple-darwin": "@sqlmodel/proxy-bin-aarch64-apple-darwin",
-  "x86_64-apple-darwin": "@sqlmodel/proxy-bin-x86_64-apple-darwin",
-  "aarch64-unknown-linux-gnu": "@sqlmodel/proxy-bin-aarch64-unknown-linux-gnu",
-  "x86_64-unknown-linux-gnu": "@sqlmodel/proxy-bin-x86_64-unknown-linux-gnu",
-  "aarch64-pc-windows-msvc": "@sqlmodel/proxy-bin-aarch64-pc-windows-msvc",
-  "x86_64-pc-windows-msvc": "@sqlmodel/proxy-bin-x86_64-pc-windows-msvc"
+  "aarch64-apple-darwin": "@ezorm/proxy-bin-aarch64-apple-darwin",
+  "x86_64-apple-darwin": "@ezorm/proxy-bin-x86_64-apple-darwin",
+  "aarch64-unknown-linux-gnu": "@ezorm/proxy-bin-aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu": "@ezorm/proxy-bin-x86_64-unknown-linux-gnu",
+  "aarch64-pc-windows-msvc": "@ezorm/proxy-bin-aarch64-pc-windows-msvc",
+  "x86_64-pc-windows-msvc": "@ezorm/proxy-bin-x86_64-pc-windows-msvc"
 };
 
 export function detectProxyTargetTriple(platform = process.platform, arch = process.arch) {
@@ -52,11 +52,11 @@ export function packCurrentPlatformBinaryPackage(outputDir) {
   mkdirSync(outputDir, { recursive: true });
 
   const targetTriple = detectProxyTargetTriple();
-  const executableName = process.platform === "win32" ? "sqlmodel_proxy.exe" : "sqlmodel_proxy";
+  const executableName = process.platform === "win32" ? "ezorm_proxy.exe" : "ezorm_proxy";
   const sourceBinary = buildCurrentPlatformProxyBinary(executableName);
   const packageName = BINARY_PACKAGE_BY_TARGET[targetTriple];
-  const templateDir = resolve(rootDir, "packages", packageName.replace("@sqlmodel/", ""));
-  const stagingDir = mkdtempSync(resolve(tmpdir(), "sqlmodel-proxy-bin-"));
+  const templateDir = resolve(rootDir, "packages", packageName.replace("@ezorm/", ""));
+  const stagingDir = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-bin-"));
 
   mkdirSync(resolve(stagingDir, "bin"), { recursive: true });
   copyFileSync(resolve(templateDir, "package.json"), resolve(stagingDir, "package.json"));
@@ -87,7 +87,7 @@ export function packNpmPackage(packageDir, outputDir) {
 }
 
 function buildCurrentPlatformProxyBinary(executableName) {
-  const build = spawnSync("cargo", ["build", "-p", "sqlmodel_proxy", "--release"], {
+  const build = spawnSync("cargo", ["build", "-p", "ezorm_proxy", "--release"], {
     cwd: rootDir,
     stdio: "inherit"
   });

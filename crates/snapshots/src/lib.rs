@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use sqlmodel_dialects::{framework_schema, SqlDialect};
+use ezorm_dialects::{framework_schema, SqlDialect};
 use sqlx::{
     mysql::{MySqlPoolOptions, MySqlRow},
     postgres::{PgPoolOptions, PgRow},

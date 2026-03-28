@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Field, Model, PrimaryKey } from "@sqlmodel/core";
+import { Field, Model, PrimaryKey } from "@ezorm/core";
 import { createNodeRuntime, detectNativeTargetTriple } from "./index";
 
-describe("@sqlmodel/runtime-node", () => {
+describe("@ezorm/runtime-node", () => {
   let runtime: Awaited<ReturnType<typeof createNodeRuntime>> | undefined;
 
   afterEach(async () => {
@@ -42,7 +42,7 @@ describe("@sqlmodel/runtime-node", () => {
 
   it("fails fast on unsupported packaged targets", () => {
     expect(() => detectNativeTargetTriple("freebsd", "x64")).toThrow(
-      "Unsupported native target for sqlmodel: freebsd/x64"
+      "Unsupported native target for ezorm: freebsd/x64"
     );
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryEventStore, UpcasterRegistry } from "@sqlmodel/events";
+import { InMemoryEventStore, UpcasterRegistry } from "@ezorm/events";
 
 describe("regression: upcaster-replay", () => {
   it("preserves replay correctness after event schema upgrades", async () => {

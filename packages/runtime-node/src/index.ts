@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createOrmClient, type OrmClient, type OrmClientOptions } from "@sqlmodel/orm";
+import { createOrmClient, type OrmClient, type OrmClientOptions } from "@ezorm/orm";
 
 export interface NodeRuntimeConnectOptions extends OrmClientOptions {
   modulePath?: string;
@@ -31,7 +31,7 @@ export function detectNativeTargetTriple(
 
   if (!targetTriple) {
     throw new Error(
-      `Unsupported native target for sqlmodel: ${platform}/${arch}. Set \`SQLMODEL_NAPI_PATH\` to a compatible .node file.`
+      `Unsupported native target for ezorm: ${platform}/${arch}. Set \`EZORM_NAPI_PATH\` to a compatible .node file.`
     );
   }
 
@@ -52,11 +52,11 @@ export function loadNativeModule(modulePath?: string): unknown {
 
   const candidates = [
     modulePath,
-    process.env.SQLMODEL_NAPI_PATH,
-    targetTriple ? resolve(here, `../native/${targetTriple}/sqlmodel_napi.node`) : undefined,
-    resolve(here, "../native/sqlmodel_napi.node"),
-    resolve(here, "../../../target/debug/sqlmodel_napi.node"),
-    resolve(here, "../../../target/release/sqlmodel_napi.node")
+    process.env.EZORM_NAPI_PATH,
+    targetTriple ? resolve(here, `../native/${targetTriple}/ezorm_napi.node`) : undefined,
+    resolve(here, "../native/ezorm_napi.node"),
+    resolve(here, "../../../target/debug/ezorm_napi.node"),
+    resolve(here, "../../../target/release/ezorm_napi.node")
   ].filter((value): value is string => Boolean(value));
 
   let lastError: unknown;
@@ -70,9 +70,9 @@ export function loadNativeModule(modulePath?: string): unknown {
 
   throw new Error(
     [
-      `Unable to load sqlmodel native binding. Tried: ${candidates.join(", ") || "(none)"}.`,
+      `Unable to load ezorm native binding. Tried: ${candidates.join(", ") || "(none)"}.`,
       unsupportedTargetError?.message,
-      "Run `pnpm build:native` during development or publish a prebuilt binary under `native/<target>/sqlmodel_napi.node`.",
+      "Run `pnpm build:native` during development or publish a prebuilt binary under `native/<target>/ezorm_napi.node`.",
       lastError instanceof Error ? lastError.message : ""
     ]
       .filter(Boolean)

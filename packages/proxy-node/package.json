@@ -1,7 +1,7 @@
 {
-  "name": "@sqlmodel/proxy-node",
+  "name": "@ezorm/proxy-node",
   "version": "0.1.0",
-  "description": "Server-side lifecycle management for the SQLModel Rust proxy.",
+  "description": "Server-side lifecycle management for the Ezorm Rust proxy.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,12 +21,12 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "@sqlmodel/proxy-bin-aarch64-apple-darwin": "0.1.0",
-    "@sqlmodel/proxy-bin-aarch64-pc-windows-msvc": "0.1.0",
-    "@sqlmodel/proxy-bin-aarch64-unknown-linux-gnu": "0.1.0",
-    "@sqlmodel/proxy-bin-x86_64-apple-darwin": "0.1.0",
-    "@sqlmodel/proxy-bin-x86_64-pc-windows-msvc": "0.1.0",
-    "@sqlmodel/proxy-bin-x86_64-unknown-linux-gnu": "0.1.0"
+    "@ezorm/proxy-bin-aarch64-apple-darwin": "0.1.0",
+    "@ezorm/proxy-bin-aarch64-pc-windows-msvc": "0.1.0",
+    "@ezorm/proxy-bin-aarch64-unknown-linux-gnu": "0.1.0",
+    "@ezorm/proxy-bin-x86_64-apple-darwin": "0.1.0",
+    "@ezorm/proxy-bin-x86_64-pc-windows-msvc": "0.1.0",
+    "@ezorm/proxy-bin-x86_64-unknown-linux-gnu": "0.1.0"
   },
   "scripts": {
     "build": "node ./scripts/build-package.mjs",

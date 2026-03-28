@@ -7,7 +7,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let database_url = env::var("DATABASE_URL").map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            "DATABASE_URL is required to start the sqlmodel_proxy service",
+            "DATABASE_URL is required to start the ezorm_proxy service",
         )
     })?;
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let app = sqlmodel_proxy::create_proxy_app(&database_url).await?;
+    let app = ezorm_proxy::create_proxy_app(&database_url).await?;
     let listener = TcpListener::bind(format!("{host}:{port}")).await?;
 
     axum::serve(listener, app).await?;

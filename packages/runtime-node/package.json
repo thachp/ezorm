@@ -1,7 +1,7 @@
 {
-  "name": "@sqlmodel/runtime-node",
+  "name": "@ezorm/runtime-node",
   "version": "0.1.0",
-  "description": "Native Node.js runtime bindings for SQLModel.",
+  "description": "Native Node.js runtime bindings for Ezorm.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,6 +31,6 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@sqlmodel/orm": "0.1.0"
+    "@ezorm/orm": "0.1.0"
   }
 }

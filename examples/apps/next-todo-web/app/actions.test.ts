@@ -29,7 +29,7 @@ import {
   createTodoAction
 } from "./actions";
 
-describe("@sqlmodel/example-next-todo-web actions", () => {
+describe("@ezorm/example-next-todo-web actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -8,5 +8,5 @@ mkdirSync(outputDir, { recursive: true });
 const result = packProxyNodeArtifacts(outputDir);
 
 process.stdout.write(
-  `Packed ${result.binaryPackageName} and @sqlmodel/proxy-node into ${outputDir}\n`
+  `Packed ${result.binaryPackageName} and @ezorm/proxy-node into ${outputDir}\n`
 );

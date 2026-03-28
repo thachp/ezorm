@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { ensureSqlModelProxy } = vi.hoisted(() => ({
-  ensureSqlModelProxy: vi.fn()
+const { ensureEzormProxy } = vi.hoisted(() => ({
+  ensureEzormProxy: vi.fn()
 }));
 
-vi.mock("@sqlmodel/proxy-node", () => ({
-  ensureSqlModelProxy
+vi.mock("@ezorm/proxy-node", () => ({
+  ensureEzormProxy
 }));
 
 import { ensureNextEdgeProxy } from "./node";
 
-describe("@sqlmodel/next node runtime", () => {
+describe("@ezorm/next node runtime", () => {
   it("returns the managed proxy endpoint", async () => {
-    ensureSqlModelProxy.mockResolvedValue({
+    ensureEzormProxy.mockResolvedValue({
       endpoint: "http://127.0.0.1:4510",
       close: async () => undefined
     });
@@ -23,7 +23,7 @@ describe("@sqlmodel/next node runtime", () => {
       })
     ).resolves.toBe("http://127.0.0.1:4510");
 
-    expect(ensureSqlModelProxy).toHaveBeenCalledWith({
+    expect(ensureEzormProxy).toHaveBeenCalledWith({
       databaseUrl: "sqlite://next-edge.db"
     });
   });

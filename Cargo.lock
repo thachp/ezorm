@@ -332,6 +332,100 @@ dependencies = [
 ]
 
 [[package]]
+name = "ezorm_dialects"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ezorm_engine"
+version = "0.1.0"
+dependencies = [
+ "ezorm_event_store",
+ "ezorm_projections",
+ "ezorm_snapshots",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "ezorm_event_store"
+version = "0.1.0"
+dependencies = [
+ "ezorm_dialects",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "ezorm_migrate"
+version = "0.1.0"
+dependencies = [
+ "ezorm_dialects",
+ "serde",
+]
+
+[[package]]
+name = "ezorm_napi"
+version = "0.1.0"
+dependencies = [
+ "ezorm_event_store",
+ "ezorm_projections",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "ezorm_projections"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ezorm_dialects",
+ "ezorm_event_store",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "ezorm_proxy"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "ezorm_event_store",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower",
+]
+
+[[package]]
+name = "ezorm_snapshots"
+version = "0.1.0"
+dependencies = [
+ "ezorm_dialects",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1593,100 +1687,6 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
-]
-
-[[package]]
-name = "sqlmodel_dialects"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "sqlmodel_engine"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sqlmodel_event_store",
- "sqlmodel_projections",
- "sqlmodel_snapshots",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "sqlmodel_event_store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sqlmodel_dialects",
- "sqlx",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "sqlmodel_migrate"
-version = "0.1.0"
-dependencies = [
- "serde",
- "sqlmodel_dialects",
-]
-
-[[package]]
-name = "sqlmodel_napi"
-version = "0.1.0"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "serde",
- "serde_json",
- "sqlmodel_event_store",
- "sqlmodel_projections",
- "tokio",
-]
-
-[[package]]
-name = "sqlmodel_projections"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "sqlmodel_dialects",
- "sqlmodel_event_store",
- "sqlx",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "sqlmodel_proxy"
-version = "0.1.0"
-dependencies = [
- "axum",
- "reqwest",
- "serde",
- "serde_json",
- "sqlmodel_event_store",
- "thiserror",
- "tokio",
- "tower",
-]
-
-[[package]]
-name = "sqlmodel_snapshots"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sqlmodel_dialects",
- "sqlx",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

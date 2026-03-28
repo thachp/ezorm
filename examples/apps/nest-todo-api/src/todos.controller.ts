@@ -10,12 +10,12 @@ import {
   type TodoRecord,
   type TodoDemoServices,
   type TodoMutationResult
-} from "@sqlmodel/example-todo-domain";
-import type { Repository } from "@sqlmodel/orm";
+} from "@ezorm/example-todo-domain";
+import type { Repository } from "@ezorm/orm";
 import {
   type TodoDemoServices,
   type TodoRecord
-} from "@sqlmodel/example-todo-domain";
+} from "@ezorm/example-todo-domain";
 import { CreateTodoDto } from "./create-todo.dto";
 import { requireTodoId } from "./id";
 import { TODO_DEMO_SERVICES, TODO_REPOSITORY } from "./tokens";

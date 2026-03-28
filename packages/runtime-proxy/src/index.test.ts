@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Field, Model, PrimaryKey } from "@sqlmodel/core";
+import { Field, Model, PrimaryKey } from "@ezorm/core";
 import { ProxyOrmClient, ProxyRuntimeError } from "./index";
 
 @Model({ table: "users" })
@@ -12,7 +12,7 @@ class User {
   email!: string;
 }
 
-describe("@sqlmodel/runtime-proxy", () => {
+describe("@ezorm/runtime-proxy", () => {
   it("posts repository lookups through the ORM proxy contract", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({ id: "usr_1", email: "alice@example.com" })

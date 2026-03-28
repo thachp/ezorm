@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { assertEdgeSafeImport } from "@sqlmodel/next";
+import { assertEdgeSafeImport } from "@ezorm/next";
 
 describe("regression: next-edge-import", () => {
   it("keeps the edge entrypoint free of native runtime imports", () => {
@@ -13,14 +13,14 @@ describe("regression: next-edge-import", () => {
   });
 
   it("rejects managed proxy imports in edge modules", () => {
-    expect(() => assertEdgeSafeImport('import "@sqlmodel/proxy-node";')).toThrow(
-      "Edge runtime modules must not import @sqlmodel/proxy-node"
+    expect(() => assertEdgeSafeImport('import "@ezorm/proxy-node";')).toThrow(
+      "Edge runtime modules must not import @ezorm/proxy-node"
     );
   });
 
   it("rejects direct ORM imports in edge modules", () => {
-    expect(() => assertEdgeSafeImport('import "@sqlmodel/orm";')).toThrow(
-      "Edge runtime modules must not import @sqlmodel/orm"
+    expect(() => assertEdgeSafeImport('import "@ezorm/orm";')).toThrow(
+      "Edge runtime modules must not import @ezorm/orm"
     );
   });
 });

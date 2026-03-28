@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sqlmodel_dialects::{framework_schema, SqlDialect};
-use sqlmodel_event_store::{
+use ezorm_dialects::{framework_schema, SqlDialect};
+use ezorm_event_store::{
     EventReader, EventRecord, EventStoreError, InMemoryEventStore, SqlEventStore,
 };
 use sqlx::{
@@ -353,7 +353,7 @@ fn dialect_from_url(database_url: &str) -> Result<SqlDialect, CheckpointStoreErr
 mod tests {
     use super::*;
     use serde_json::json;
-    use sqlmodel_event_store::NewEvent;
+    use ezorm_event_store::NewEvent;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     struct CountingProjector<'a> {

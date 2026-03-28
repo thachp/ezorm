@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_projections"
+name = "ezorm_projections"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 serde.workspace = true
-sqlmodel_dialects = { path = "../dialects" }
-sqlmodel_event_store = { path = "../event_store" }
+ezorm_dialects = { path = "../dialects" }
+ezorm_event_store = { path = "../event_store" }
 sqlx.workspace = true
 thiserror.workspace = true
 

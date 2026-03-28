@@ -1,12 +1,12 @@
 {
-  "name": "@sqlmodel/proxy-bin-aarch64-unknown-linux-gnu",
+  "name": "@ezorm/proxy-bin-aarch64-unknown-linux-gnu",
   "version": "0.1.0",
-  "description": "Prebuilt sqlmodel_proxy binary for aarch64-unknown-linux-gnu.",
+  "description": "Prebuilt ezorm_proxy binary for aarch64-unknown-linux-gnu.",
   "license": "MIT",
   "os": ["linux"],
   "cpu": ["arm64"],
   "bin": {
-    "sqlmodel_proxy": "./bin/sqlmodel_proxy"
+    "ezorm_proxy": "./bin/ezorm_proxy"
   },
   "files": [
     "bin",

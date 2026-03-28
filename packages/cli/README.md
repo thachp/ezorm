@@ -1,6 +1,6 @@
-# sqlmod
+# ezorm
 
-`sqlmod` is the published CLI package for SQLModel workflows.
+`ezorm` is the published CLI package for Ezorm workflows.
 
 ## Current Status
 
@@ -9,33 +9,33 @@ The current command surface is implemented and stable enough to inspect with `--
 ## Run Without Installing
 
 ```sh
-npx sqlmod --help
+npx ezorm --help
 ```
 
 ## Install Locally
 
 ```sh
-npm install sqlmod
+npm install ezorm
 ```
 
 ## Commands
 
 ```text
-sqlmod migrate generate [name]
-sqlmod migrate apply
-sqlmod migrate status
-sqlmod db pull
-sqlmod db push
+ezorm migrate generate [name]
+ezorm migrate apply
+ezorm migrate status
+ezorm db pull
+ezorm db push
 ```
 
 ## Example Output
 
 ```sh
-npx sqlmod migrate status
+npx ezorm migrate status
 # Queued migrate status
 
-npx sqlmod db push
+npx ezorm db push
 # Queued db push
 ```
 
-For the TypeScript APIs behind SQLModel applications, see the repository root README and the `@sqlmodel/*` packages.
+For the TypeScript APIs behind Ezorm applications, see the repository root README and the `@ezorm/*` packages.

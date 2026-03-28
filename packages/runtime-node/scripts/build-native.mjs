@@ -8,7 +8,7 @@ const packageDir = resolve(scriptDir, "..");
 const workspaceRoot = resolve(packageDir, "../..");
 const release = process.argv.includes("--release");
 const profile = release ? "release" : "debug";
-const crateName = "sqlmodel_napi";
+const crateName = "ezorm_napi";
 const targetTriple = detectTargetTriple(process.platform, process.arch);
 const outputDir = resolve(packageDir, "native", targetTriple);
 const flatOutputDir = resolve(packageDir, "native");
@@ -75,7 +75,7 @@ function detectTargetTriple(platform, arch) {
 
   if (!targetTriple) {
     console.error(
-      `Unsupported native target for sqlmodel: ${platform}/${arch}. Build on a supported target or provide SQLMODEL_NAPI_PATH at runtime.`
+      `Unsupported native target for ezorm: ${platform}/${arch}. Build on a supported target or provide EZORM_NAPI_PATH at runtime.`
     );
     process.exit(1);
   }

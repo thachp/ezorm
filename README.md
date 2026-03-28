@@ -1,11 +1,11 @@
-# sqlmodel-ts
+# ezorm
 
-`sqlmod` is the CLI package for SQLModel workflows. This repository also contains the `@sqlmodel/*` TypeScript packages for model metadata, ORM repositories, and framework/runtime integration.
+`ezorm` is the CLI package for Ezorm workflows. This repository also contains the `@ezorm/*` TypeScript packages for model metadata, ORM repositories, and framework/runtime integration.
 
 > Current status
 >
-> - `@sqlmodel/core` + `@sqlmodel/orm` are the primary application path.
-> - The `sqlmod` CLI surface is implemented, but most commands still print queued/demo output.
+> - `@ezorm/core` + `@ezorm/orm` are the primary application path.
+> - The `ezorm` CLI surface is implemented, but most commands still print queued/demo output.
 > - The Nest and Next todo examples are the best end-to-end references today.
 > - The example ORM flow defaults to SQLite in-memory, so restarting the Nest API clears data.
 
@@ -13,8 +13,8 @@
 
 If you have never used this library before, use this order:
 
-1. Run `npx sqlmod --help` to see the current CLI surface.
-2. Install `@sqlmodel/core` and `@sqlmodel/orm`.
+1. Run `npx ezorm --help` to see the current CLI surface.
+2. Install `@ezorm/core` and `@ezorm/orm`.
 3. Define a decorated model class.
 4. Create an ORM client and use a repository.
 5. Add a runtime or framework adapter only after the model/repository flow works.
@@ -23,35 +23,35 @@ If you have never used this library before, use this order:
 
 | Goal | Command |
 | --- | --- |
-| Try the CLI without installing anything | `npx sqlmod --help` |
-| Define model metadata with decorators | `npm install @sqlmodel/core` |
-| Persist models with repository CRUD | `npm install @sqlmodel/orm` |
-| Add a Node.js runtime helper | `npm install @sqlmodel/runtime-node` |
-| Add Next.js helpers | `npm install @sqlmodel/next` |
-| Add NestJS wiring | `npm install @sqlmodel/nestjs` |
+| Try the CLI without installing anything | `npx ezorm --help` |
+| Define model metadata with decorators | `npm install @ezorm/core` |
+| Persist models with repository CRUD | `npm install @ezorm/orm` |
+| Add a Node.js runtime helper | `npm install @ezorm/runtime-node` |
+| Add Next.js helpers | `npm install @ezorm/next` |
+| Add NestJS wiring | `npm install @ezorm/nestjs` |
 
 ## Try The CLI In 30 Seconds
 
 ```sh
-npx sqlmod --help
+npx ezorm --help
 ```
 
 Current output:
 
 ```text
 Usage:
-  sqlmod migrate generate [name]
-  sqlmod migrate apply
-  sqlmod migrate status
-  sqlmod db pull
-  sqlmod db push
+  ezorm migrate generate [name]
+  ezorm migrate apply
+  ezorm migrate status
+  ezorm db pull
+  ezorm db push
 ```
 
 Today, these commands are best treated as workflow discovery. They parse the supported ORM-first command surface and mostly print queued/demo output rather than executing a fully wired migration or introspection workflow.
 
 ## Define Your First Model
 
-If your first question is "how do I define the model?", start with `@sqlmodel/core`.
+If your first question is "how do I define the model?", start with `@ezorm/core`.
 
 ```ts
 import {
@@ -60,7 +60,7 @@ import {
   PrimaryKey,
   getModelMetadata,
   validateModelInput
-} from "@sqlmodel/core";
+} from "@ezorm/core";
 
 @Model({ table: "todos" })
 class Todo {
@@ -92,11 +92,11 @@ This gives you immediate metadata and validation:
 
 ## Persist The Model With A Repository
 
-`@sqlmodel/orm` is the primary runtime package. It creates a SQL-backed client and exposes repositories for CRUD operations.
+`@ezorm/orm` is the primary runtime package. It creates a SQL-backed client and exposes repositories for CRUD operations.
 
 ```ts
-import { Field, Model, PrimaryKey } from "@sqlmodel/core";
-import { createOrmClient } from "@sqlmodel/orm";
+import { Field, Model, PrimaryKey } from "@ezorm/core";
+import { createOrmClient } from "@ezorm/orm";
 
 @Model({ table: "todos" })
 class Todo {
@@ -148,38 +148,38 @@ The repository surface is intentionally small in v1:
 The current public CLI surface is defined in [`packages/cli/src/index.ts`](/Users/thachp/repos/sqlmodel-ts/packages/cli/src/index.ts):
 
 ```sh
-sqlmod migrate generate [name]
-sqlmod migrate apply
-sqlmod migrate status
-sqlmod db pull
-sqlmod db push
+ezorm migrate generate [name]
+ezorm migrate apply
+ezorm migrate status
+ezorm db pull
+ezorm db push
 ```
 
 Current demo behavior:
 
 ```sh
-npx sqlmod migrate status
+npx ezorm migrate status
 # Queued migrate status
 
-npx sqlmod db push
+npx ezorm db push
 # Queued db push
 ```
 
 Inside this workspace, you can build and run the local CLI with:
 
 ```sh
-pnpm build:sqlmod
-node packages/cli/bin/sqlmod.js --help
+pnpm build:ezorm
+node packages/cli/bin/ezorm.js --help
 ```
 
 ## Choose A Runtime
 
 Once your model/repository flow is in place, pick the adapter that matches your app:
 
-- `@sqlmodel/runtime-node`
-- `@sqlmodel/next`
-  Use `@sqlmodel/next/node` for Next.js code running on the Node.js runtime, or `@sqlmodel/next/edge` when edge code must talk to an HTTP endpoint.
-- `@sqlmodel/nestjs`
+- `@ezorm/runtime-node`
+- `@ezorm/next`
+  Use `@ezorm/next/node` for Next.js code running on the Node.js runtime, or `@ezorm/next/edge` when edge code must talk to an HTTP endpoint.
+- `@ezorm/nestjs`
 
 The maintained examples live here:
 
@@ -189,4 +189,4 @@ The maintained examples live here:
 
 ## Legacy CQRS/Event Packages
 
-`@sqlmodel/cqrs` and `@sqlmodel/events` still exist in the workspace, but they are no longer the primary product path. New examples, docs, and maintained workflows should start with `@sqlmodel/core` + `@sqlmodel/orm`.
+`@ezorm/cqrs` and `@ezorm/events` still exist in the workspace, but they are no longer the primary product path. New examples, docs, and maintained workflows should start with `@ezorm/core` + `@ezorm/orm`.

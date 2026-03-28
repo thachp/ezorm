@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_proxy"
+name = "ezorm_proxy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlmodel_event_store = { path = "../event_store" }
+ezorm_event_store = { path = "../event_store" }
 thiserror.workspace = true
 tokio.workspace = true
 

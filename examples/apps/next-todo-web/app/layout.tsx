@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SQLModel Todo Demo",
-  description: "Next.js frontend for the SQLModel NestJS todo API demo."
+  title: "Ezorm Todo Demo",
+  description: "Next.js frontend for the Ezorm NestJS todo API demo."
 };
 
 export default function RootLayout({

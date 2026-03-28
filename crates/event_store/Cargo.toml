@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_event_store"
+name = "ezorm_event_store"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 sqlx.workspace = true
-sqlmodel_dialects = { path = "../dialects" }
+ezorm_dialects = { path = "../dialects" }
 
 [dev-dependencies]
 tokio.workspace = true

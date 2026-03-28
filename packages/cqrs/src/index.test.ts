@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { InMemoryEventStore, InMemorySnapshotStore } from "@sqlmodel/events";
+import { InMemoryEventStore, InMemorySnapshotStore } from "@ezorm/events";
 import {
   CommandBus,
   ProjectorRegistry,
@@ -11,7 +11,7 @@ import {
   registerQueryHandler
 } from "./index";
 
-describe("@sqlmodel/cqrs", () => {
+describe("@ezorm/cqrs", () => {
   it("requires version on all command writes", async () => {
     const command = defineCommand<{ version: number; amount: number }, string>("deposit");
     const store = new InMemoryEventStore();

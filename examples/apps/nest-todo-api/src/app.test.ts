@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { createTodoApiApplication } from "./app";
 
-describe("@sqlmodel/example-nest-todo-api", () => {
+describe("@ezorm/example-nest-todo-api", () => {
   let app: INestApplication | undefined;
 
   afterEach(async () => {

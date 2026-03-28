@@ -1,5 +1,5 @@
-import { ensureSqlModelProxy, type EnsureSqlModelProxyOptions } from "@sqlmodel/proxy-node";
-import { createNodeRuntime } from "@sqlmodel/runtime-node";
+import { ensureEzormProxy, type EnsureEzormProxyOptions } from "@ezorm/proxy-node";
+import { createNodeRuntime } from "@ezorm/runtime-node";
 import { NEXT_NODE_RUNTIME } from "./index";
 
 export async function createNextNodeRuntime(
@@ -11,7 +11,7 @@ export async function createNextNodeRuntime(
   };
 }
 
-export async function ensureNextEdgeProxy(options: EnsureSqlModelProxyOptions): Promise<string> {
-  const proxy = await ensureSqlModelProxy(options);
+export async function ensureNextEdgeProxy(options: EnsureEzormProxyOptions): Promise<string> {
+  const proxy = await ensureEzormProxy(options);
   return proxy.endpoint;
 }

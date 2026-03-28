@@ -5,7 +5,7 @@ import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export interface EnsureSqlModelProxyOptions {
+export interface EnsureEzormProxyOptions {
   databaseUrl: string;
   host?: string;
   port?: number;
@@ -13,7 +13,7 @@ export interface EnsureSqlModelProxyOptions {
   binaryPath?: string;
 }
 
-export interface SqlModelProxyHandle {
+export interface EzormProxyHandle {
   endpoint: string;
   close(): Promise<void>;
 }
@@ -21,12 +21,12 @@ export interface SqlModelProxyHandle {
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_STARTUP_TIMEOUT_MS = 10_000;
 const BINARY_PACKAGE_BY_TARGET: Record<string, string> = {
-  "aarch64-apple-darwin": "@sqlmodel/proxy-bin-aarch64-apple-darwin",
-  "x86_64-apple-darwin": "@sqlmodel/proxy-bin-x86_64-apple-darwin",
-  "aarch64-unknown-linux-gnu": "@sqlmodel/proxy-bin-aarch64-unknown-linux-gnu",
-  "x86_64-unknown-linux-gnu": "@sqlmodel/proxy-bin-x86_64-unknown-linux-gnu",
-  "aarch64-pc-windows-msvc": "@sqlmodel/proxy-bin-aarch64-pc-windows-msvc",
-  "x86_64-pc-windows-msvc": "@sqlmodel/proxy-bin-x86_64-pc-windows-msvc"
+  "aarch64-apple-darwin": "@ezorm/proxy-bin-aarch64-apple-darwin",
+  "x86_64-apple-darwin": "@ezorm/proxy-bin-x86_64-apple-darwin",
+  "aarch64-unknown-linux-gnu": "@ezorm/proxy-bin-aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu": "@ezorm/proxy-bin-x86_64-unknown-linux-gnu",
+  "aarch64-pc-windows-msvc": "@ezorm/proxy-bin-aarch64-pc-windows-msvc",
+  "x86_64-pc-windows-msvc": "@ezorm/proxy-bin-x86_64-pc-windows-msvc"
 };
 
 interface ManagedProxy {
@@ -40,12 +40,12 @@ const activeProxyPromises = new Map<string, Promise<ManagedProxy>>();
 const activeChildren = new Set<ManagedProxyChildProcess>();
 let shutdownHooksInstalled = false;
 
-export async function ensureSqlModelProxy(
-  options: EnsureSqlModelProxyOptions
-): Promise<SqlModelProxyHandle> {
+export async function ensureEzormProxy(
+  options: EnsureEzormProxyOptions
+): Promise<EzormProxyHandle> {
   const databaseUrl = options.databaseUrl.trim();
   if (!databaseUrl) {
-    throw new Error("databaseUrl is required to start the sqlmodel proxy");
+    throw new Error("databaseUrl is required to start the ezorm proxy");
   }
 
   const host = options.host ?? DEFAULT_HOST;
@@ -96,7 +96,7 @@ export function detectProxyTargetTriple(
   const targetTriple = supportedTargets[`${platform}:${arch}`];
 
   if (!targetTriple) {
-    throw new Error(`Unsupported proxy target for sqlmodel: ${platform}/${arch}.`);
+    throw new Error(`Unsupported proxy target for ezorm: ${platform}/${arch}.`);
   }
 
   return targetTriple;
@@ -119,13 +119,13 @@ export function resolvePackagedProxyBinary(
     throw new Error(
       [
         error instanceof Error ? error.message : String(error),
-        "Install a compatible prebuilt @sqlmodel/proxy-bin-* package or pass binaryPath."
+        "Install a compatible prebuilt @ezorm/proxy-bin-* package or pass binaryPath."
       ].join(" ")
     );
   }
 
   const packageName = BINARY_PACKAGE_BY_TARGET[targetTriple];
-  const executableName = platform === "win32" ? "sqlmodel_proxy.exe" : "sqlmodel_proxy";
+  const executableName = platform === "win32" ? "ezorm_proxy.exe" : "ezorm_proxy";
   let lastError: unknown;
 
   try {
@@ -147,7 +147,7 @@ export function resolvePackagedProxyBinary(
 
   throw new Error(
     [
-      `Unable to resolve sqlmodel proxy binary for ${targetTriple}.`,
+      `Unable to resolve ezorm proxy binary for ${targetTriple}.`,
       `Install ${packageName} or pass binaryPath.`,
       lastError instanceof Error ? lastError.message : ""
     ]
@@ -157,7 +157,7 @@ export function resolvePackagedProxyBinary(
 }
 
 async function startManagedProxy(
-  options: EnsureSqlModelProxyOptions & Required<Pick<EnsureSqlModelProxyOptions, "databaseUrl" | "host">>,
+  options: EnsureEzormProxyOptions & Required<Pick<EnsureEzormProxyOptions, "databaseUrl" | "host">>,
   key: string
 ): Promise<ManagedProxy> {
   installShutdownHooks();
@@ -243,7 +243,7 @@ async function findFreePort(host: string): Promise<number> {
     server.listen(0, host, () => {
       const address = server.address();
       if (!address || typeof address === "string") {
-        reject(new Error("Unable to determine a free port for sqlmodel proxy"));
+        reject(new Error("Unable to determine a free port for ezorm proxy"));
         return;
       }
 
@@ -272,7 +272,7 @@ async function waitForHealth(
     if (startupError) {
       throw new Error(
         [
-          "sqlmodel proxy failed to start.",
+          "ezorm proxy failed to start.",
           startupError.message,
           formatOutput(getOutput())
         ]
@@ -284,7 +284,7 @@ async function waitForHealth(
     if (child.exitCode !== null) {
       throw new Error(
         [
-          "sqlmodel proxy exited before becoming healthy.",
+          "ezorm proxy exited before becoming healthy.",
           formatOutput(getOutput())
         ]
           .filter(Boolean)
@@ -306,7 +306,7 @@ async function waitForHealth(
 
   throw new Error(
     [
-      `Timed out waiting for sqlmodel proxy healthcheck at ${endpoint}/healthz.`,
+      `Timed out waiting for ezorm proxy healthcheck at ${endpoint}/healthz.`,
       formatOutput(getOutput())
     ]
       .filter(Boolean)

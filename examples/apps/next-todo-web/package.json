@@ -1,5 +1,5 @@
 {
-  "name": "@sqlmodel/example-next-todo-web",
+  "name": "@ezorm/example-next-todo-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",

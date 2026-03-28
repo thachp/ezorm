@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Field, Model, PrimaryKey } from "@sqlmodel/core";
+import { Field, Model, PrimaryKey } from "@ezorm/core";
 import { createOrmClient } from "./index";
 
-describe("@sqlmodel/orm", () => {
+describe("@ezorm/orm", () => {
   let client: Awaited<ReturnType<typeof createOrmClient>> | undefined;
 
   afterEach(async () => {

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { packProxyNodeArtifacts } from "./proxy-packaging.mjs";
 
-const workspace = mkdtempSync(resolve(tmpdir(), "sqlmodel-proxy-smoke-"));
+const workspace = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-smoke-"));
 const { binaryTarball, proxyNodeTarball } = packProxyNodeArtifacts(workspace);
 
 runInstallSmoke("npm", ["install", proxyNodeTarball, binaryTarball], "npm install smoke test");
@@ -13,7 +13,7 @@ runInstallSmoke("pnpm", ["add", proxyNodeTarball, binaryTarball], "pnpm add smok
 process.stdout.write(`Managed proxy smoke test passed with ${proxyNodeTarball}\n`);
 
 function runInstallSmoke(command, args, label) {
-  const installWorkspace = mkdtempSync(resolve(tmpdir(), "sqlmodel-proxy-install-"));
+  const installWorkspace = mkdtempSync(resolve(tmpdir(), "ezorm-proxy-install-"));
   run("npm", ["init", "-y"], installWorkspace);
   run(command, args, installWorkspace);
 
@@ -21,12 +21,12 @@ function runInstallSmoke(command, args, label) {
   writeFileSync(
     smokeScript,
     [
-      'import { ensureSqlModelProxy } from "@sqlmodel/proxy-node";',
+      'import { ensureEzormProxy } from "@ezorm/proxy-node";',
       "",
       "let handle;",
       "",
       "try {",
-      "  handle = await ensureSqlModelProxy({",
+      "  handle = await ensureEzormProxy({",
       '    databaseUrl: "sqlite::memory:"',
       "  });",
       "",

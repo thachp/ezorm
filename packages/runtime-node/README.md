@@ -1,16 +1,16 @@
-# @sqlmodel/runtime-node
+# @ezorm/runtime-node
 
-`@sqlmodel/runtime-node` packages the Node.js runtime bindings used by SQLModel.
+`@ezorm/runtime-node` packages the Node.js runtime bindings used by Ezorm.
 
 ## Prebuilt Native Layout
 
 The package looks for prebuilt native bindings at:
 
 ```text
-native/<target-triple>/sqlmodel_napi.node
+native/<target-triple>/ezorm_napi.node
 ```
 
-The build script also writes a flat `native/sqlmodel_napi.node` copy for local
+The build script also writes a flat `native/ezorm_napi.node` copy for local
 development.
 
 ## Build

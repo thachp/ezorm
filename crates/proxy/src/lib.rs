@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use sqlmodel_event_store::{EventRecord, EventStoreError, NewEvent, SqlEventStore};
+use ezorm_event_store::{EventRecord, EventStoreError, NewEvent, SqlEventStore};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

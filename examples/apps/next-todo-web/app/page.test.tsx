@@ -28,7 +28,7 @@ vi.mock("../lib/todo-api", () => ({
 
 import Page from "./page";
 
-describe("@sqlmodel/example-next-todo-web page", () => {
+describe("@ezorm/example-next-todo-web page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

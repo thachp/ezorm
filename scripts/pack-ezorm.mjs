@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageDir = resolve(rootDir, "packages/cli");
-const outputDir = resolve(rootDir, ".artifacts/sqlmod");
+const outputDir = resolve(rootDir, ".artifacts/ezorm");
 
 mkdirSync(outputDir, { recursive: true });
 

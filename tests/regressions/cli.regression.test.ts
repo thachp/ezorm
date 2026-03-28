@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCliHelp, parseCliCommand, runCli } from "sqlmod";
+import { formatCliHelp, parseCliCommand, runCli } from "ezorm";
 
 describe("regression: cli-routing", () => {
   it("parses the ORM-first command surface consistently", () => {
@@ -7,9 +7,9 @@ describe("regression: cli-routing", () => {
     expect(runCli(["migrate", "status"])).toBe("Queued migrate status");
   });
 
-  it("documents the sqlmod command surface", () => {
-    expect(formatCliHelp()).toContain("sqlmod migrate status");
-    expect(formatCliHelp()).toContain("sqlmod db push");
-    expect(formatCliHelp()).not.toContain("sqlmod projector replay");
+  it("documents the ezorm command surface", () => {
+    expect(formatCliHelp()).toContain("ezorm migrate status");
+    expect(formatCliHelp()).toContain("ezorm db push");
+    expect(formatCliHelp()).not.toContain("ezorm projector replay");
   });
 });

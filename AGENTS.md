@@ -1,4 +1,4 @@
-# sqlmodel Agent Guide
+# ezorm Agent Guide
 
 ## Workspace Overview
 
@@ -15,7 +15,7 @@
 - Inspect the current package, crate, and CLI surface before adding a new workflow command or query.
 - Prefer the root validation commands that already exist: `pnpm typecheck`, `pnpm test:ts`, `pnpm test`, and `cargo test`.
 - Keep adapters thin. CLI parsing and other public entrypoints should delegate business logic into shared ORM/repository helpers instead of reimplementing it inline.
-- Proxy bootstrap should go through `@sqlmodel/proxy-node` or `@sqlmodel/next/node`; do not reintroduce manual `cargo run -p sqlmodel_proxy` as the default developer workflow.
+- Proxy bootstrap should go through `@ezorm/proxy-node` or `@ezorm/next/node`; do not reintroduce manual `cargo run -p ezorm_proxy` as the default developer workflow.
 - When a workflow changes, update `AGENTS.md` and any related docs in the same change.
 
 ## Common Commands
@@ -24,32 +24,32 @@ Root scripts:
 
 - `pnpm build:ts`
 - `pnpm build:proxy-node`
-- `pnpm build:sqlmod`
+- `pnpm build:ezorm`
 - `pnpm example:build`
 - `pnpm example:nest:dev`
 - `pnpm example:next:dev`
 - `pnpm example:test`
 - `pnpm pack:proxy-node`
 - `pnpm typecheck`
-- `pnpm pack:sqlmod`
+- `pnpm pack:ezorm`
 - `pnpm smoke:proxy-node`
-- `pnpm smoke:sqlmod`
+- `pnpm smoke:ezorm`
 - `pnpm release:proxy-node`
-- `pnpm release:sqlmod`
+- `pnpm release:ezorm`
 - `pnpm test:ts`
 - `pnpm test`
 - `cargo test`
 
 Current CLI command workflows:
 
-- `sqlmod migrate generate [name]`
-- `sqlmod migrate apply`
-- `sqlmod db push`
+- `ezorm migrate generate [name]`
+- `ezorm migrate apply`
+- `ezorm db push`
 
 Current CLI query workflows:
 
-- `sqlmod migrate status`
-- `sqlmod db pull`
+- `ezorm migrate status`
+- `ezorm db pull`
 
 Current example workflows:
 
@@ -60,8 +60,8 @@ Current example workflows:
 ## ORM Rules
 
 - New public application workflows should be modeled around decorated models and repository CRUD.
-- `@sqlmodel/core` owns metadata, validation, indices, and relation declarations.
-- `@sqlmodel/orm` owns schema push/pull and CRUD behavior through repositories.
+- `@ezorm/core` owns metadata, validation, indices, and relation declarations.
+- `@ezorm/orm` owns schema push/pull and CRUD behavior through repositories.
 - Keep primary key handling simple in v1: application-supplied keys and single-column primary keys only.
 - Relations are descriptive metadata today; do not add implicit join loading or lazy-loading behavior without a clear API decision.
 - CLI and adapters should route through shared ORM client/repository helpers instead of embedding SQL logic inline.

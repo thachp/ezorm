@@ -2,8 +2,8 @@ use napi::bindgen_prelude::Result as NapiResult;
 use napi::Error;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-use sqlmodel_event_store::{EventRecord, NewEvent, SqlEventStore};
-use sqlmodel_projections::{CheckpointStore, ProjectionCheckpoint, SqlCheckpointStore};
+use ezorm_event_store::{EventRecord, NewEvent, SqlEventStore};
+use ezorm_projections::{CheckpointStore, ProjectionCheckpoint, SqlCheckpointStore};
 use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -17,8 +17,8 @@ impl NodeBindingManifest {
     #[must_use]
     pub fn new(target_triple: impl Into<String>) -> Self {
         Self {
-            package_name: "@sqlmodel/runtime-node".into(),
-            binary_name: "sqlmodel_napi".into(),
+            package_name: "@ezorm/runtime-node".into(),
+            binary_name: "ezorm_napi".into(),
             target_triple: target_triple.into(),
         }
     }
@@ -50,14 +50,14 @@ pub struct NativeProjectionCheckpoint {
 }
 
 #[napi]
-pub struct NativeSqlModelRuntime {
+pub struct NativeEzormRuntime {
     runtime: Runtime,
     store: SqlEventStore,
     checkpoints: SqlCheckpointStore,
 }
 
 #[napi]
-impl NativeSqlModelRuntime {
+impl NativeEzormRuntime {
     #[napi]
     pub fn bootstrap(&self) -> NapiResult<()> {
         self.runtime
@@ -145,7 +145,7 @@ impl NativeSqlModelRuntime {
 }
 
 #[napi]
-pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeSqlModelRuntime> {
+pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeEzormRuntime> {
     let runtime = Runtime::new().map_err(to_napi_error)?;
     let store = runtime
         .block_on(SqlEventStore::connect(&database_url))
@@ -154,7 +154,7 @@ pub fn connect_native_runtime(database_url: String) -> NapiResult<NativeSqlModel
         .block_on(SqlCheckpointStore::connect(&database_url))
         .map_err(to_napi_error)?;
 
-    Ok(NativeSqlModelRuntime {
+    Ok(NativeEzormRuntime {
         runtime,
         store,
         checkpoints,
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn builds_binding_manifest() {
         let manifest = NodeBindingManifest::new("aarch64-apple-darwin");
-        assert_eq!(manifest.package_name, "@sqlmodel/runtime-node");
+        assert_eq!(manifest.package_name, "@ezorm/runtime-node");
     }
 
     #[test]

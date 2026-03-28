@@ -1,6 +1,6 @@
 import { Module, type DynamicModule } from "@nestjs/common";
-import { TodoModel, type TodoDemoServices } from "@sqlmodel/example-todo-domain";
-import { SqlModelModule } from "@sqlmodel/nestjs";
+import { TodoModel, type TodoDemoServices } from "@ezorm/example-todo-domain";
+import { EzormModule } from "@ezorm/nestjs";
 import { TODO_DEMO_SERVICES, TODO_REPOSITORY } from "./tokens";
 import { TodosController } from "./todos.controller";
 
@@ -10,7 +10,7 @@ export class TodoApiModule {
     return {
       module: TodoApiModule,
       imports: [
-        SqlModelModule.forRoot({
+        EzormModule.forRoot({
           client: services.client,
           repositories: [{ provide: TODO_REPOSITORY, model: TodoModel }]
         })

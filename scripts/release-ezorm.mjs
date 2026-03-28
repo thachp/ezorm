@@ -4,8 +4,8 @@ import { spawnSync } from "node:child_process";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-run("pnpm", ["pack:sqlmod"]);
-run("pnpm", ["smoke:sqlmod"]);
+run("pnpm", ["pack:ezorm"]);
+run("pnpm", ["smoke:ezorm"]);
 
 function run(command, args) {
   const result = spawnSync(command, args, {

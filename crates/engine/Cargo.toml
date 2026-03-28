@@ -1,5 +1,5 @@
 [package]
-name = "sqlmodel_engine"
+name = "ezorm_engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,9 +8,9 @@ license.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-sqlmodel_event_store = { path = "../event_store" }
-sqlmodel_projections = { path = "../projections" }
-sqlmodel_snapshots = { path = "../snapshots" }
+ezorm_event_store = { path = "../event_store" }
+ezorm_projections = { path = "../projections" }
+ezorm_snapshots = { path = "../snapshots" }
 
 [dev-dependencies]
 tokio.workspace = true

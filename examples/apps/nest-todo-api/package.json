@@ -1,5 +1,5 @@
 {
-  "name": "@sqlmodel/example-nest-todo-api",
+  "name": "@ezorm/example-nest-todo-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
-    "@sqlmodel/example-todo-domain": "workspace:*",
-    "@sqlmodel/nestjs": "workspace:*",
+    "@ezorm/example-todo-domain": "workspace:*",
+    "@ezorm/nestjs": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "reflect-metadata": "^0.2.2",

@@ -1,9 +1,9 @@
 {
-  "name": "@sqlmodel/orm",
+  "name": "@ezorm/orm",
   "version": "0.1.0",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@sqlmodel/core": "0.1.0"
+    "@ezorm/core": "0.1.0"
   }
 }

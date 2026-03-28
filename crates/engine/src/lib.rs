@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
-use sqlmodel_event_store::{
+use ezorm_event_store::{
     EventReader, EventRecord, EventStoreError, InMemoryEventStore, NewEvent, SqlEventStore,
 };
-use sqlmodel_projections::{
+use ezorm_projections::{
     replay_projection, reset_projection_checkpoint, CheckpointStore, CheckpointStoreError,
     InMemoryCheckpointStore, ProjectionCheckpoint, ProjectionRunnerError, Projector,
     SqlCheckpointStore,
 };
-use sqlmodel_snapshots::{
+use ezorm_snapshots::{
     InMemorySnapshotStore, SnapshotRecord, SnapshotStoreError, SqlSnapshotStore,
 };
 
@@ -19,14 +19,14 @@ pub struct LoadedStream {
 }
 
 #[derive(Debug, Clone)]
-pub struct SqlModelEngine {
+pub struct EzormEngine {
     event_store: InMemoryEventStore,
     snapshots: InMemorySnapshotStore,
     checkpoints: InMemoryCheckpointStore,
 }
 
 #[derive(Debug, Clone)]
-pub struct RelationalSqlModelEngine {
+pub struct RelationalEzormEngine {
     event_store: SqlEventStore,
     snapshots: SqlSnapshotStore,
     checkpoints: SqlCheckpointStore,
@@ -44,7 +44,7 @@ pub enum EngineError {
     ProjectionRunner(#[from] ProjectionRunnerError),
 }
 
-impl SqlModelEngine {
+impl EzormEngine {
     #[must_use]
     pub fn new(
         event_store: InMemoryEventStore,
@@ -130,7 +130,7 @@ impl SqlModelEngine {
     }
 }
 
-impl RelationalSqlModelEngine {
+impl RelationalEzormEngine {
     pub async fn connect(database_url: &str) -> Result<Self, EngineError> {
         Ok(Self {
             event_store: SqlEventStore::connect(database_url).await?,
@@ -246,7 +246,7 @@ mod tests {
         let event_store = InMemoryEventStore::new();
         let snapshots = InMemorySnapshotStore::new();
         let checkpoints = InMemoryCheckpointStore::new();
-        let engine = SqlModelEngine::new(event_store.clone(), snapshots.clone(), checkpoints);
+        let engine = EzormEngine::new(event_store.clone(), snapshots.clone(), checkpoints);
 
         event_store
             .append(
@@ -284,7 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn relational_engine_bootstraps_and_loads_after_snapshot() {
-        let engine = RelationalSqlModelEngine::connect("sqlite::memory:")
+        let engine = RelationalEzormEngine::connect("sqlite::memory:")
             .await
             .unwrap();
         engine.bootstrap().await.unwrap();
@@ -327,7 +327,7 @@ mod tests {
         let event_store = InMemoryEventStore::new();
         let snapshots = InMemorySnapshotStore::new();
         let checkpoints = InMemoryCheckpointStore::new();
-        let engine = SqlModelEngine::new(event_store.clone(), snapshots, checkpoints);
+        let engine = EzormEngine::new(event_store.clone(), snapshots, checkpoints);
 
         event_store
             .append(
@@ -365,7 +365,7 @@ mod tests {
 
     #[tokio::test]
     async fn relational_engine_replays_and_resets_projection_checkpoints() {
-        let engine = RelationalSqlModelEngine::connect("sqlite::memory:")
+        let engine = RelationalEzormEngine::connect("sqlite::memory:")
             .await
             .unwrap();
         engine.bootstrap().await.unwrap();

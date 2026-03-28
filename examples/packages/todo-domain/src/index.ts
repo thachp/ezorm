@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { Field, Model, PrimaryKey } from "@sqlmodel/core";
-import { createOrmClient, type OrmClient, type Repository } from "@sqlmodel/orm";
+import { Field, Model, PrimaryKey } from "@ezorm/core";
+import { createOrmClient, type OrmClient, type Repository } from "@ezorm/orm";
 
 export interface TodoRecord {
   id: string;

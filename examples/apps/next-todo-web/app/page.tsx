@@ -48,7 +48,7 @@ export default async function Page({
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2rem] border border-white/60 bg-[var(--panel)] p-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur">
           <p className="text-sm font-medium uppercase tracking-[0.3em] text-teal-700">
-            SQLModel Demo
+            Ezorm Demo
           </p>
           <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
             End-to-end ORM todo flow with a Tailwind frontend.
